@@ -1,21 +1,23 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { TestCaseDescriptor, TestCaseType, GTestType } from './types';
-import { testMetaData } from './extension';
+import { getBuildFolder, testMetaData } from './extension';
 import { regexp } from './constants';
+import { logger } from './logger';
 
-export async function parseDocument(document: vscode.TextDocument, testController: vscode.TestController, buildFolder: string, logOutput: vscode.OutputChannel) {
+export async function parseDocument(document: vscode.TextDocument, testController: vscode.TestController) {
     // if (!document.isDirty) {
     //     return;
     // }
     if (document.uri.scheme != 'file') {
         return;
     }
+    const buildFolder = getBuildFolder();
 
-    logOutput.appendLine(`document uri is ${document.uri}`);
+    logger().info(`document uri is ${document.uri}`);
     const languageName = document.languageId;
     if (languageName && languageName === "cpp") {
-        logOutput.appendLine(`Current language in file is ${languageName}`);
+        logger().info(`Current language in file is ${languageName}`);
         const descriptors = await getTestsFromFile(buildFolder, document);
 
         if (descriptors.length < 1) {
@@ -40,22 +42,22 @@ export async function parseDocument(document: vscode.TextDocument, testControlle
 
         descriptors.forEach((descriptor, index) => {
             const fixture = fileItem.children.get(descriptor.fixture);
-            logOutput.appendLine(`target is ${descriptor.target}`);
+            logger().info(`target is ${descriptor.target}`);
 
             if (fixture) {
-                logOutput.appendLine(`fixture ${fixture} existing already descriptor.name ${descriptor.name}`);
+                logger().info(`fixture ${fixture} existing already descriptor.name ${descriptor.name}`);
                 const newTestCase = testController.createTestItem(descriptor.id, descriptor.name, document.uri);
-                logOutput.appendLine(`Added id ${descriptor.id}`);
+                logger().info(`Added id ${descriptor.id}`);
                 newTestCase.range = descriptor.position;
                 descriptor.testCaseType = TestCaseType.Testcase;
                 testMetaData.set(newTestCase, descriptor);
                 fixture.children.add(newTestCase);
-                logOutput.appendLine(`descriptor fixture ${descriptor.fixture} 
+                logger().info(`descriptor fixture ${descriptor.fixture} 
                 name ${descriptor.name} target ${descriptor.target} targetFile ${descriptor.targetFile} 
                 gTestType ${descriptor.gTestType} testCaseType ${descriptor.testCaseType}`);
             }
             else {
-                logOutput.appendLine(`fixture ${fixture} not existing, adding it descriptor.name ${descriptor.name}`);
+                logger().info(`fixture ${fixture} not existing, adding it descriptor.name ${descriptor.name}`);
                 let fixtureDescriptor: TestCaseDescriptor = {
                     fixture: descriptor.fixture,
                     name: descriptor.fixture,
@@ -71,7 +73,7 @@ export async function parseDocument(document: vscode.TextDocument, testControlle
                 fileItem.children.add(newFixture);
 
                 const newTestCase = testController.createTestItem(descriptor.id, descriptor.name, document.uri);
-                logOutput.appendLine(`Added id ${descriptor.id}`);
+                logger().info(`Added id ${descriptor.id}`);
                 descriptor.testCaseType = TestCaseType.Testcase;
                 testMetaData.set(newTestCase, descriptor);
                 newTestCase.range = descriptor.position;

@@ -3,8 +3,6 @@ import * as cp from "child_process";
 
 export async function spawnShell(cmd: string, onDone: (code: number) => any, logFn: (line: string) => any) {
     const ls = cp.spawn(cmd, { shell: true });
-    ls.stdout.setEncoding('utf8');
-    ls.unref();
     ls.stdout.on('data', logFn);
     ls.stderr.on('data', logFn);
     ls.on('close', onDone);

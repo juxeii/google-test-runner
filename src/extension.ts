@@ -1,99 +1,130 @@
 import * as vscode from 'vscode';
-import { TestCaseDescriptor, TestCaseType, GTestType, TestInfo } from './types';
-import { regexp } from './constants';
 import * as path from 'path';
-import { spawnShell, execShell } from './system';
+import * as fs from 'fs';
+import { TestCaseDescriptor } from './types';
+import { targetMappingFileName, buildNinjaFile } from './constants';
+import { execShell } from './system';
 import { createTestController } from './testrun';
 import { parseDocument } from './testdiscovery';
-import { getExtensionLogger } from "@vscode-logging/logger";
+import { logger } from './logger';
+
+export function activate(context: vscode.ExtensionContext) {
+    const extensionName = context.extension.packageJSON.displayName;
+    logger().info(`${extensionName} activated.`);
+    initExtension(context);
+}
+
+function initExtension(context: vscode.ExtensionContext) {
+    initConfigurationListeners(context);
+    initComponents(context);
+}
+
+function hasConfigurationChanged(event: vscode.ConfigurationChangeEvent) {
+    return event.affectsConfiguration("googletestrunner.buildFolder");
+}
+
+function initComponents(context: vscode.ExtensionContext) {
+    if (!isConfigurationValid()) {
+        showMisConfigurationMessage();
+        return;
+    }
+
+    let testController = initTestController(context);
+    initDocumentListeners(testController);
+    parseCurrentEditor(testController);
+
+    logConfigurationDone();
+}
+
+function parseCurrentEditor(testController: vscode.TestController) {
+    const currentWindow = vscode.window.activeTextEditor;
+    if (currentWindow) {
+        parseDocument(currentWindow.document, testController);
+    }
+}
+
+function initTestController(context: vscode.ExtensionContext) {
+    let testController = createTestController();
+    context.subscriptions.push(testController);
+    return testController;
+}
+
+function initConfigurationListeners(context: vscode.ExtensionContext) {
+    let buildNinjaListener = createListenerForNinjaBuildFile(context);
+    context.subscriptions.push(buildNinjaListener);
+    let buildFolder = getBuildFolder();
+    logger().info(`Listening to ${buildNinjaFile} file creation/changes in build folder ${buildFolder}.`);
+
+    vscode.workspace.onDidChangeConfiguration(event => {
+        if (hasConfigurationChanged(event)) {
+            initComponents(context);
+        }
+    });
+}
+
+function initDocumentListeners(testController: vscode.TestController) {
+    vscode.workspace.onDidOpenTextDocument(document => parseDocument(document, testController));
+    vscode.workspace.onDidSaveTextDocument(document => parseDocument(document, testController));
+    vscode.workspace.onDidCloseTextDocument(document => {
+        const baseName = path.parse(document.uri.path).base;
+        testController.items.delete(baseName);
+    })
+}
+
+function logConfigurationDone() {
+    let buildFolder = getBuildFolder();
+    logger().info(`Configuring GoogleTestRunner with ${buildNinjaFile} in ${buildFolder} done.`);
+}
+
+function showMisConfigurationMessage() {
+    let buildFolder = getBuildFolder();
+    const misconfiguredMsg = `GoogleTestRunner needs the ${buildNinjaFile} file to work. Please run cmake configure at least once with your configured build folder ${buildFolder}.`;
+    logger().info(misconfiguredMsg);
+    vscode.window.showWarningMessage(misconfiguredMsg)
+}
+
+function isBuildNinjaFilePresent() {
+    let buildNinjaPath = path.join(getBuildFolder(), buildNinjaFile);
+    return fs.existsSync(buildNinjaPath);
+}
+
+function isConfigurationValid() {
+    return isBuildNinjaFilePresent();
+}
+
+function createListenerForNinjaBuildFile(context: vscode.ExtensionContext) {
+    let buildFolder = getBuildFolder();
+    let listener = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(buildFolder, `${buildNinjaFile}`)
+    );
+    listener.onDidCreate(uri => {
+        logger().info(`${buildNinjaFile} created at ${uri}.`);
+        createTargetMappingFile(buildFolder);
+        initComponents(context);
+    });
+    listener.onDidChange(uri => {
+        logger().info(`${buildNinjaFile} changed at ${uri}.`);
+        createTargetMappingFile(buildFolder);
+    });
+    return listener;
+}
 
 export let testMetaData = new WeakMap<vscode.TestItem, TestCaseDescriptor>();
 
 export function getBuildFolder() {
     let config = vscode.workspace.getConfiguration("googletestrunner");
     let buildFolderFromConfig = config.get<string>('buildFolder');
-    let workspaceFolder: string = vscode.workspace.rootPath ? vscode.workspace.rootPath : ".";
+    let workspaceFolder: string = vscode.workspace.workspaceFolders![0].uri.path;
     let re = /\$\{workspaceFolder\}/;
     if (buildFolderFromConfig) {
         return buildFolderFromConfig.replace(re, workspaceFolder);
-    } else {
-        return buildFolderFromConfig!;
     }
+    return buildFolderFromConfig!;
 }
 
-// this method is called when your extension is activated
-// your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
-    // const logger = getExtensionLogger({
-    //     extName: "GoogleTestRunner",
-    //     level: "info", // See LogLevel type in @vscode-logging/types for possible logLevels
-    //     logPath: context.logPath, // The logPath is only available from the `vscode.ExtensionContext`
-    //     logOutputChannel: vscode.window.createOutputChannel("GoogleTestRunner"), // OutputChannel for the logger
-    //     sourceLocationTracking: false,
-    //     logConsole: false // define if messages should be logged to the consol
-    // });
-
-    // logger.info("Hi From logger");
-
-    let logOutput = vscode.window.createOutputChannel("GoogleTestRunner");
-    let testController = createTestController(logOutput);
-    context.subscriptions.push(testController);
-
-    //Create output channel
-    let config = vscode.workspace.getConfiguration("googletestrunner");
-    let buildFolderFromConfig = config.get<string>('buildFolder');
-
-    let workspaceFolder: string = vscode.workspace.rootPath ? vscode.workspace.rootPath : ".";
-    let re = /\$\{workspaceFolder\}/;
-    let buildFolder: string;
-
-    if (buildFolderFromConfig) {
-        buildFolder = buildFolderFromConfig.replace(re, workspaceFolder);
-    } else {
-        return;
-    }
-
-    logOutput.appendLine(`GoogleTestRunner started with build folder ${buildFolder}`);
-
-    const currentWindow = vscode.window.activeTextEditor;
-
-    if (currentWindow) {
-        parseDocument(currentWindow.document, testController, buildFolder, logOutput);
-        logOutput.appendLine(`currentWindow is ${currentWindow.document.uri}`);
-    }
-    let folders = vscode.workspace.workspaceFolders;
-    if (folders) {
-        logOutput.appendLine(`Listening to build.ninja file creates/changes workspace ${folders[0].uri.path}`);
-        let workspaceRoot = folders[0].uri.path;
-        let buildFolder = `${workspaceRoot}/build`;
-
-        let watcher = vscode.workspace.createFileSystemWatcher(
-            new vscode.RelativePattern(folders[0], 'build/build.ninja')
-        );
-        watcher.onDidCreate(uri => {
-            logOutput.appendLine(`build.ninja created ${uri}`);
-            createGoogleTestFileToTargetMappingFile(workspaceRoot);
-        });
-        watcher.onDidChange(uri => {
-            logOutput.appendLine(`build.ninja changed ${uri}`);
-            createGoogleTestFileToTargetMappingFile(workspaceRoot);
-        });
-        context.subscriptions.push(watcher);
-
-        vscode.workspace.onDidOpenTextDocument(document => parseDocument(document, testController, buildFolder, logOutput));
-        vscode.workspace.onDidSaveTextDocument(document => parseDocument(document, testController, buildFolder, logOutput));
-        vscode.workspace.onDidCloseTextDocument(document => {
-            const baseName = path.parse(document.uri.path).base;
-            testController.items.delete(baseName);
-        })
-    }
+async function createTargetMappingFile(buildFolder: string) {
+    execShell(`cd ${buildFolder} && ninja -t targets all > ${targetMappingFileName}`);
 }
 
-// this method is called when your extension is deactivated
 export function deactivate() {
-}
-
-async function createGoogleTestFileToTargetMappingFile(path: string) {
-    let buildFolder = `${path}/build`;
-    await execShell(`cd ${buildFolder}; ninja -t targets all > targets.out`);
 }

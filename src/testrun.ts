@@ -3,14 +3,15 @@ import * as path from 'path';
 import { testMetaData, getBuildFolder } from './extension';
 import { spawnShell, execShell } from './system';
 import { TestCaseDescriptor, TestCaseType, GTestType, TestInfo } from './types';
+import { logger } from './logger';
 
-export function createTestController(logOutput: vscode.OutputChannel) {
+export function createTestController() {
     let testController = vscode.tests.createTestController('GoogleTestController', 'GoogleTestController');
-    testController.createRunProfile('Run Tests', vscode.TestRunProfileKind.Run, createRunHandler(testController, logOutput), true);
+    testController.createRunProfile('Run Tests', vscode.TestRunProfileKind.Run, createRunHandler(testController), true);
     return testController;
 }
 
-function createRunHandler(testController: vscode.TestController, logOutput: vscode.OutputChannel) {
+function createRunHandler(testController: vscode.TestController) {
     return async function runHandler(
         request: vscode.TestRunRequest,
         token: vscode.CancellationToken
@@ -32,13 +33,13 @@ function createRunHandler(testController: vscode.TestController, logOutput: vsco
             if (!targetFile) {
                 return;
             }
-            logOutput.appendLine(`adding test ${name}`);
+            logger().info(`adding test ${name}`);
 
             const testInfo: TestInfo = { item: item, descriptor: descriptor };
             if (!testInfosByTarget.has(targetFile)) {
                 let testInfos: TestInfo[] = [];
                 testInfos.push(testInfo);
-                logOutput.appendLine(`creating map entry for targetFile ${targetFile}`);
+                logger().info(`creating map entry for targetFile ${targetFile}`);
                 testInfosByTarget.set(targetFile, testInfos);
             }
             else {
@@ -53,46 +54,46 @@ function createRunHandler(testController: vscode.TestController, logOutput: vsco
         if (request.include) {
             request.include.forEach(processItem);
         } else {
-            logOutput.appendLine(`Running all tests`);
+            logger().info(`Running all tests`);
             testController.items.forEach(processItem);
         }
 
         //BUILD TARGETS
-        logOutput.appendLine(`Building required targets...`);
+        logger().info(`Building required targets...`);
         let buildFailed = false;
         const buildFolder = getBuildFolder();
         const targetsWithSpaces = Array.from(testInfosByTarget.keys(), targetFileName => path.parse(targetFileName).base).join(' ');
         const cmd = `cd ${buildFolder} && ninja ${targetsWithSpaces}`;
         spawnShell(cmd, () => {
             if (!buildFailed) {
-                logOutput.appendLine(`Building required targets done.`);
+                logger().info(`Building required targets done.`);
                 runTargets(buildFolder, request, testInfosByTarget);
             }
         }, (line) => {
             let buildFailure = /ninja: build stopped/;
             if (buildFailure.exec(line)) {
-                logOutput.appendLine(`Building targets failed!. No testcases were executed!`);
+                logger().info(`Building targets failed!. No testcases were executed!`);
                 buildFailed = true;
             }
             else
-                logOutput.appendLine(`${line}`);
+                logger().info(`${line}`);
         });
     }
 
     async function runTargets(buildFolder: string, request: vscode.TestRunRequest, testInfosByTarget: Map<string, TestInfo[]>) {
         const run = testController.createTestRun(request);
         function runTarget(targetFile: string, filter: string, jsonFileName: string, testInfos: TestInfo[]) {
-            logOutput.appendLine(`Running targets...`);
+            logger().info(`Running targets...`);
             const cmd = `cd ${buildFolder} && ` + targetFile + ` --gtest_filter=${filter} --gtest_output=json:${jsonFileName}`;
             spawnShell(cmd, async () => {
-                logOutput.appendLine(`Running targets done. size ${testInfosByTarget.size}`);
+                logger().info(`Running targets done. size ${testInfosByTarget.size}`);
                 await onJSONResultAvailable(buildFolder, jsonFileName, run, testInfos);
                 testInfosByTarget.delete(targetFile);
                 if (testInfosByTarget.size === 0) {
-                    logOutput.appendLine(`All done, ending.`);
+                    logger().info(`All done, ending.`);
                     run.end();
                 }
-            }, (line) => logOutput.appendLine(`${line}`));
+            }, (line) => logger().info(`${line}`));
         }
 
         testInfosByTarget.forEach((testInfos, targetFile, map) => {
@@ -105,11 +106,11 @@ function createRunHandler(testController: vscode.TestController, logOutput: vsco
     async function onJSONResultAvailable(buildFolder: string, jsonFileName: string, run: vscode.TestRun, testInfos: TestInfo[]) {
         let jsonFileUri = vscode.Uri.file(`${buildFolder}/${jsonFileName}`);
         const jsonResult = await vscode.workspace.fs.readFile(jsonFileUri);
-        logOutput.appendLine(`jsonFileUri ${jsonFileUri}`);
-        //logOutput.appendLine(`jsonResult ${jsonResult}`);
+        logger().info(`jsonFileUri ${jsonFileUri}`);
+        //logger().info(`jsonResult ${jsonResult}`);
 
         const parsedJsonResult = JSON.parse(jsonResult.toString());
-        //logOutput.appendLine(`TEST3 ${parsedJsonResult.testsuites[0].testsuite[0].name} ${parsedJsonResult.testsuites.length} `);
+        //logger().info(`TEST3 ${parsedJsonResult.testsuites[0].testsuite[0].name} ${parsedJsonResult.testsuites.length} `);
 
         let testsuites: Array<any> = parsedJsonResult.testsuites;
         let itemById = new Map<string, vscode.TestItem>()
@@ -122,29 +123,29 @@ function createRunHandler(testController: vscode.TestController, logOutput: vsco
                 let innerTestSuite: any = innerTestSuites[y];
                 let testCaseName = innerTestSuite.name;
 
-                logOutput.appendLine(`testCaseName ${testCaseName}`);
+                logger().info(`testCaseName ${testCaseName}`);
 
                 let isParamTest = innerTestSuite.value_param;
                 let testCaseId = "";
                 if (isParamTest) {
                     testCaseId = testSuiteName;
-                    logOutput.appendLine(`it is a param test  testCaseId ${testCaseId}`);
+                    logger().info(`it is a param test  testCaseId ${testCaseId}`);
                 }
                 else {
                     testCaseId = testSuiteName + "." + testCaseName;
-                    logOutput.appendLine(`it is not a param test testCaseId ${testCaseId}`);
+                    logger().info(`it is not a param test testCaseId ${testCaseId}`);
                 }
 
                 let item = itemById.get(testCaseId);
                 if (item) {
-                    logOutput.appendLine(`item found ${item.id}`);
+                    logger().info(`item found ${item.id}`);
                     let failures = innerTestSuite.failures;
                     if (!failures) {
-                        logOutput.appendLine(`Testcase ${testCaseId} passed.`);
+                        logger().info(`Testcase ${testCaseId} passed.`);
                         run.passed(item);
                     }
                     else {
-                        logOutput.appendLine(`Testcase ${testCaseId} failed.`);
+                        logger().info(`Testcase ${testCaseId} failed.`);
                         let failureMessage: string = failures[0].failure;
 
                         const message = new vscode.TestMessage(failureMessage.substring(failureMessage.indexOf("\n") + 1));
@@ -156,16 +157,16 @@ function createRunHandler(testController: vscode.TestController, logOutput: vsco
                         }
                         else {
                             lineNo = Number(lineNoMatch[1]) - 1;
-                            logOutput.appendLine(`found line number ${lineNo}`);
+                            logger().info(`found line number ${lineNo}`);
                         }
                         message.location = new vscode.Location(item.uri!, new vscode.Position(lineNo, 0));
-                        logOutput.appendLine(`Test1`);
+                        logger().info(`Test1`);
                         run.failed(item, message);
-                        logOutput.appendLine(`Test2`);
+                        logger().info(`Test2`);
                     }
                 }
                 else {
-                    logOutput.appendLine(`item not found`);
+                    logger().info(`item not found`);
                 }
             }
         }
