@@ -34,3 +34,8 @@ export type TestInfo = {
     item: vscode.TestItem;
     testcase: TestCase;
 }
+
+export type TargetInfo = {
+    target: string;
+    targetFile: string;
+}

@@ -8,7 +8,6 @@ import { logger } from './logger';
 export async function parseDocument(document: vscode.TextDocument, testController: vscode.TestController) {
     let testCases: TestCase[] = [];
 
-    const buildFolder = cfg.getBuildFolder();
     logger().debug(`Discovering testcases in document ${document.uri}`);
     testCases = await discoverTestCasesInDocument(document);
     if (testCases.length < 1) {
@@ -70,31 +69,4 @@ function detectTestCaseType(testCaseMacro: string) {
         default:
             return GTestType.None;
     }
-}
-
-async function readTargetFile(buildFolder: string) {
-    let targetFileUri = vscode.Uri.file(buildFolder + "/targets.out");
-    const text = await vscode.workspace.fs.readFile(targetFileUri);
-    return text;
-}
-
-async function getTargetForFile(buildFolder: string, document: vscode.TextDocument) {
-    const baseName = path.parse(document.uri.path).base;
-    const targetFileContents = await readTargetFile(buildFolder);
-    let targetMatchRegEx = new RegExp("(?<=" + baseName + "\.o: CXX_COMPILER__).*(?=_)", "m");
-    let fileMatch = targetMatchRegEx.exec(targetFileContents.toString());
-    if (!fileMatch) {
-        return "";
-    }
-    return fileMatch[0];
-}
-
-async function getTargetFileOfTarget(buildFolder: string, target: string) {
-    const targetFileContents = await readTargetFile(buildFolder);
-    let targetFileMatchRegEx = new RegExp("(.+" + target + "): (?:CXX_EXECUTABLE_LINKER__).*(?:" + target + ").*");
-    let match = targetFileMatchRegEx.exec(targetFileContents.toString());
-    if (!match) {
-        return "";
-    }
-    return match[1];
 }

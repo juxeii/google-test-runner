@@ -1,16 +1,43 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { Fixture, testMetaData } from './types';
+import { Fixture, TargetInfo, testMetaData } from './types';
 import * as rj from './resultjson';
 import * as cfg from './configuration';
 import { spawnShell } from './system';
 import { TestCase, GTestType, TestInfo } from './types';
 import { logger } from './logger';
+import { buildTests } from './buildtests';
+import { runConfiguration } from './extension';
 
-export function createTestController() {
+export function createTestController(runConfiguration: Map<vscode.Uri, TargetInfo>) {
     let testController = vscode.tests.createTestController('GoogleTestController', 'GoogleTestController');
-    testController.createRunProfile('Run Tests', vscode.TestRunProfileKind.Run, createRunHandler(testController), true);
+    testController.createRunProfile('Run Tests', vscode.TestRunProfileKind.Run, createRunHandler(testController, runConfiguration), true);
     return testController;
+}
+
+function createRunHandler(testController: vscode.TestController, runConfiguration: Map<vscode.Uri, TargetInfo>) {
+    return async function runHandler(
+        request: vscode.TestRunRequest,
+        token: vscode.CancellationToken
+    ) {
+        logger().info(`Running testcases`);
+        const targets = Array.from(runConfiguration.values()).map(targetInfo => targetInfo.target);
+
+        buildTests(targets, () => logger().info(`Build done, whats next?.`), () => logger().info(`Build failed, damn!`));
+        // let testInfosByTarget = new Map<string, TestInfo[]>();
+        // if (request.include) {
+        //     request.include.forEach(item => fillRunInfoWithItem(item, testInfosByTarget));
+        // } else {
+        //     testController.items.forEach(item => fillRunInfoWithItem(item, testInfosByTarget));
+        // }
+
+        // let buildFailed = false;
+        // const buildFolder = cfg.getBuildFolder();
+        // const targetsWithSpaces = Array.from(testInfosByTarget.keys(), targetFileName => path.parse(targetFileName).base).join(' ');
+        // logger().info(`Building required targets ${targetsWithSpaces}`);
+        // const cmd = `cd ${buildFolder} && ninja ${targetsWithSpaces}`;
+        // buildTargets(testController, testInfosByTarget, request);
+    }
 }
 
 function testInfoFromTestCase(testCase: TestCase, item: vscode.TestItem) {
@@ -159,27 +186,6 @@ function createFailureMessageForDocument(item: vscode.TestItem, failureMessage: 
     let lineNo = rj.lineNumberFromFailureMessage(failureMessage);
     message.location = new vscode.Location(item.uri!, new vscode.Position(lineNo, 0));
     return message;
-}
-
-function createRunHandler(testController: vscode.TestController) {
-    return async function runHandler(
-        request: vscode.TestRunRequest,
-        token: vscode.CancellationToken
-    ) {
-        let testInfosByTarget = new Map<string, TestInfo[]>();
-        if (request.include) {
-            request.include.forEach(item => fillRunInfoWithItem(item, testInfosByTarget));
-        } else {
-            testController.items.forEach(item => fillRunInfoWithItem(item, testInfosByTarget));
-        }
-
-        let buildFailed = false;
-        const buildFolder = cfg.getBuildFolder();
-        const targetsWithSpaces = Array.from(testInfosByTarget.keys(), targetFileName => path.parse(targetFileName).base).join(' ');
-        logger().info(`Building required targets ${targetsWithSpaces}`);
-        const cmd = `cd ${buildFolder} && ninja ${targetsWithSpaces}`;
-        buildTargets(testController, testInfosByTarget, request);
-    }
 }
 
 function runFilter(descriptors: TestCase[]) {

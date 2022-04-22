@@ -7,6 +7,13 @@ import { createTestController } from './testrun';
 import { parseDocument } from './testdiscovery';
 import { updateTestControllerFromDocument } from './testcontroller';
 import { logger } from './logger';
+import { TargetInfo } from './types';
+import { createTargetInfoForDocument } from './runconfig';
+
+
+let buildNinjaListener: vscode.FileSystemWatcher;
+export let runConfiguration = new Map<vscode.Uri, TargetInfo>();
+let noTestFiles = new Set<vscode.Uri>();
 
 export function activate(context: vscode.ExtensionContext) {
     logger().info(`${cfg.extensionName} activated.`);
@@ -14,26 +21,39 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 function initExtension(context: vscode.ExtensionContext) {
-    initConfigurationListeners(context);
-    initComponents(context);
-}
-
-function initComponents(context: vscode.ExtensionContext) {
-    if (!cfg.isConfigurationValid()) {
-        showMisConfigurationMessage();
-        return;
-    }
-
     let testController = initTestController(context);
     initDocumentListeners(context, testController);
-    parseCurrentEditor(context, testController);
+    initConfigurationListener(context, testController);
+    buildNinjaListener = createBuildNinjaListener(context, testController);
+    processConfigurationStatus(context, testController);
+}
 
-    logConfigurationDone();
+function onNewBuildFolder(context: vscode.ExtensionContext, testController: vscode.TestController) {
+    buildNinjaListener.dispose();
+    buildNinjaListener = createBuildNinjaListener(context, testController);
+    processConfigurationStatus(context, testController);
+}
+
+function processConfigurationStatus(context: vscode.ExtensionContext, testController: vscode.TestController) {
+    if (cfg.isConfigurationValid()) {
+        createTargetMappingFile();
+        let editors = vscode.window.visibleTextEditors;
+        editors.forEach(e => logger().info(`Visible ${e.document.uri}`));
+        parseCurrentEditor(context, testController);
+        logConfigurationDone();
+    }
+    else {
+        showMisConfigurationMessage();
+        const noItems: vscode.TestItem[] = [];
+        testController.items.replace(noItems);
+        runConfiguration.clear();
+        noTestFiles.clear();
+    }
 }
 
 function parseCurrentEditor(context: vscode.ExtensionContext, testController: vscode.TestController) {
     const currentWindow = vscode.window.activeTextEditor;
-    if (currentWindow) {
+    if (currentWindow && isDocumentValidForParsing(currentWindow.document)) {
         fillTestControllerWithTestCasesFromDocument(context, currentWindow.document, testController);
     }
 }
@@ -42,55 +62,77 @@ function isDocumentValidForParsing(document: vscode.TextDocument) {
     if (document.uri.scheme != 'file') {
         return false;
     }
+
+    if (noTestFiles.has(document.uri)) {
+        logger().debug(`File ${document.uri} has no tests. No need to reparse.`);
+        return false;
+    }
+
+    if (runConfiguration.has(document.uri) && !document.isDirty) {
+        return false;
+    }
+
     const languageName = document.languageId;
     return languageName && languageName === "cpp";
 }
 
 async function fillTestControllerWithTestCasesFromDocument(context: vscode.ExtensionContext, document: vscode.TextDocument, testController: vscode.TestController) {
-    if (!isDocumentValidForParsing(document)) {
-        return;
-    }
     const testCases = await parseDocument(document, testController);
     if (testCases.length < 1) {
+        noTestFiles.add(document.uri);
+        logger().debug(`Adding ${document.uri} to set of files with no tests.`);
         return;
     }
 
-    context.workspaceState.update(document.uri.path, testCases);
+    //context.workspaceState.update(document.uri.path, testCases);
     updateTestControllerFromDocument(document, testController, testCases);
+    logger().debug(`Current testcontroller item size ${testController.items.size}`);
+    let targetInfo = await createTargetInfoForDocument(document, testController);
+    runConfiguration.set(document.uri, targetInfo);
 }
 
 function initTestController(context: vscode.ExtensionContext) {
-    let testController = createTestController();
+    let testController = createTestController(runConfiguration);
     context.subscriptions.push(testController);
     return testController;
 }
 
-function initConfigurationListeners(context: vscode.ExtensionContext) {
-    let buildNinjaListener = createListenerForNinjaBuildFile(context);
-    context.subscriptions.push(buildNinjaListener);
-    let buildFolder = cfg.getBuildFolder();
-    logger().info(`Listening to ${buildNinjaFile} file creation/changes in build folder ${buildFolder}.`);
-
-    vscode.workspace.onDidChangeConfiguration(event => {
+function initConfigurationListener(context: vscode.ExtensionContext, testController: vscode.TestController) {
+    const changeConfigurationListener = vscode.workspace.onDidChangeConfiguration(event => {
         if (cfg.hasConfigurationChanged(event)) {
-            initComponents(context);
+            onNewBuildFolder(context, testController);
         }
     });
+    context.subscriptions.push(changeConfigurationListener);
 }
 
 function initDocumentListeners(context: vscode.ExtensionContext, testController: vscode.TestController) {
-    vscode.workspace.onDidOpenTextDocument(document => {
-        //logger().info(`onDidOpenTextDocument ${document.uri}`);
+    let activeTextEditorListener = vscode.window.onDidChangeActiveTextEditor(editor => {
+        if (!editor) {
+            return;
+        }
+        logger().debug(`onDidChangeActiveTextEditor ${editor.document.uri}`);
+        if (!isDocumentValidForParsing(editor.document)) {
+            return;
+        }
+        fillTestControllerWithTestCasesFromDocument(context, editor.document, testController);
+    });
+    // let openTextDocumentListener = vscode.workspace.onDidOpenTextDocument(document => {
+    //     logger().debug(`onDidOpenTextDocument ${document.uri.path}`);
+    //     fillTestControllerWithTestCasesFromDocument(context, document, testController);
+    // });
+    let saveTextDocumentListener = vscode.workspace.onDidSaveTextDocument(document => {
+        logger().debug(`onDidSaveTextDocument ${document.uri}`);
         fillTestControllerWithTestCasesFromDocument(context, document, testController);
     });
-    vscode.workspace.onDidSaveTextDocument(document => {
-        //logger().info(`onDidSaveTextDocument ${document.uri}`);
-        fillTestControllerWithTestCasesFromDocument(context, document, testController);
-    });
-    vscode.workspace.onDidCloseTextDocument(document => {
+    let closeTextDocumentListener = vscode.workspace.onDidCloseTextDocument(document => {
         const baseName = path.parse(document.uri.path).base;
         testController.items.delete(baseName);
     })
+    context.subscriptions.push(activeTextEditorListener);
+    //context.subscriptions.push(openTextDocumentListener);
+    context.subscriptions.push(saveTextDocumentListener);
+    context.subscriptions.push(closeTextDocumentListener);
 }
 
 function logConfigurationDone() {
@@ -105,24 +147,30 @@ function showMisConfigurationMessage() {
     vscode.window.showWarningMessage(misconfiguredMsg)
 }
 
-function createListenerForNinjaBuildFile(context: vscode.ExtensionContext) {
+function createBuildNinjaListener(context: vscode.ExtensionContext, testController: vscode.TestController) {
     let buildFolder = cfg.getBuildFolder();
     let listener = vscode.workspace.createFileSystemWatcher(
         new vscode.RelativePattern(buildFolder, `${buildNinjaFile}`)
     );
     listener.onDidCreate(uri => {
         logger().info(`${buildNinjaFile} created at ${uri}.`);
-        createTargetMappingFile(buildFolder);
-        initComponents(context);
+        onNewBuildFolder(context, testController);
     });
     listener.onDidChange(uri => {
         logger().info(`${buildNinjaFile} changed at ${uri}.`);
-        createTargetMappingFile(buildFolder);
+        createTargetMappingFile();
     });
+    listener.onDidDelete(uri => {
+        logger().info(`${buildNinjaFile} deleted ${uri}.`);
+        processConfigurationStatus(context, testController);
+    });
+    context.subscriptions.push(listener);
+    logger().info(`Listening to ${buildNinjaFile} file creation/changes in build folder ${buildFolder}.`);
     return listener;
 }
 
-async function createTargetMappingFile(buildFolder: string) {
+function createTargetMappingFile() {
+    const buildFolder = cfg.getBuildFolder();
     execShell(`cd ${buildFolder} && ninja -t targets all > ${targetMappingFileName}`);
 }
 
