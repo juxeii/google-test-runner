@@ -1,4 +1,3 @@
-import * as vscode from 'vscode';
 import * as cp from "child_process";
 
 export async function spawnShell(cmd: string, onDone: (code: number) => any, logFn: (line: string) => any) {
@@ -17,13 +16,4 @@ export function execShell(cmd: string) {
             return resolve(out);
         });
     });
-}
-
-export function runInTerminal(cmd: string) {
-    const terminalName = "GoogleTestRunner";
-    const existingTerminal = vscode.window.terminals.find(terminal => terminal.name === terminalName);
-    const terminal = existingTerminal ? existingTerminal : vscode.window.createTerminal(terminalName);
-    terminal.show();
-    terminal.sendText(`${cmd}`);
-    terminal.state
 }

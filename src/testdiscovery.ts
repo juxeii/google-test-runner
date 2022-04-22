@@ -1,86 +1,93 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as cfg from './configuration';
 import { TestCaseDescriptor, TestCaseType, GTestType } from './types';
-import { getBuildFolder, testMetaData } from './extension';
+import { testMetaData } from './types';
 import { regexp } from './constants';
 import { logger } from './logger';
 
 export async function parseDocument(document: vscode.TextDocument, testController: vscode.TestController) {
-    // if (!document.isDirty) {
-    //     return;
-    // }
     if (document.uri.scheme != 'file') {
         return;
     }
-    const buildFolder = getBuildFolder();
+    const buildFolder = cfg.getBuildFolder();
 
-    logger().info(`document uri is ${document.uri}`);
+    logger().debug(`Discovering testcases in document ${document.uri}`);
     const languageName = document.languageId;
     if (languageName && languageName === "cpp") {
-        logger().info(`Current language in file is ${languageName}`);
         const descriptors = await getTestsFromFile(buildFolder, document);
-
         if (descriptors.length < 1) {
+            logger().debug(`No testcases found in document ${document.uri}`);
             return;
         }
-        let descriptor = descriptors[0];
-        const baseName = path.parse(document.uri.path).base;
-        let fixtureDescriptor: TestCaseDescriptor = {
-            fixture: descriptor.fixture,
-            name: descriptor.fixture,
-            id: descriptor.id,
-            target: descriptor.target,
-            targetFile: descriptor.targetFile,
-            position: descriptor.position,
-            gTestType: descriptor.gTestType,
-            testCaseType: TestCaseType.File
-        };
-        const fileItem = testController.createTestItem(baseName, baseName);
-
-        testMetaData.set(fileItem, fixtureDescriptor);
-        testController.items.add(fileItem);
-
-        descriptors.forEach((descriptor, index) => {
-            const fixture = fileItem.children.get(descriptor.fixture);
-            logger().info(`target is ${descriptor.target}`);
-
+        const rootFixture = addNewRootFixture(testController, descriptors[0], document);
+        descriptors.forEach((descriptor) => {
+            const fixture = rootFixture.children.get(descriptor.fixture);
             if (fixture) {
-                logger().info(`fixture ${fixture} existing already descriptor.name ${descriptor.name}`);
-                const newTestCase = testController.createTestItem(descriptor.id, descriptor.name, document.uri);
-                logger().info(`Added id ${descriptor.id}`);
-                newTestCase.range = descriptor.position;
-                descriptor.testCaseType = TestCaseType.Testcase;
-                testMetaData.set(newTestCase, descriptor);
-                fixture.children.add(newTestCase);
-                logger().info(`descriptor fixture ${descriptor.fixture} 
-                name ${descriptor.name} target ${descriptor.target} targetFile ${descriptor.targetFile} 
-                gTestType ${descriptor.gTestType} testCaseType ${descriptor.testCaseType}`);
+                addTestCaseToFixture(fixture, testController, descriptor, document);
             }
             else {
-                logger().info(`fixture ${fixture} not existing, adding it descriptor.name ${descriptor.name}`);
-                let fixtureDescriptor: TestCaseDescriptor = {
-                    fixture: descriptor.fixture,
-                    name: descriptor.fixture,
-                    id: descriptor.id,
-                    target: descriptor.target,
-                    targetFile: descriptor.targetFile,
-                    position: descriptor.position,
-                    gTestType: descriptor.gTestType,
-                    testCaseType: TestCaseType.Fixture
-                };
-                const newFixture = testController.createTestItem(descriptor.fixture, descriptor.fixture);
-                testMetaData.set(newFixture, fixtureDescriptor);
-                fileItem.children.add(newFixture);
-
-                const newTestCase = testController.createTestItem(descriptor.id, descriptor.name, document.uri);
-                logger().info(`Added id ${descriptor.id}`);
-                descriptor.testCaseType = TestCaseType.Testcase;
-                testMetaData.set(newTestCase, descriptor);
-                newTestCase.range = descriptor.position;
-                newFixture.children.add(newTestCase);
+                let newFixture = addNewFixture(rootFixture, testController, descriptor);
+                addTestCaseToFixture(newFixture, testController, descriptor, document);
             }
         })
     }
+}
+
+function addNewRootFixture(testController: vscode.TestController, descriptor: TestCaseDescriptor, document: vscode.TextDocument) {
+    const baseName = path.parse(document.uri.path).base;
+    let rootDescriptor: TestCaseDescriptor = {
+        fixture: descriptor.fixture,
+        name: descriptor.fixture,
+        id: descriptor.id,
+        target: descriptor.target,
+        targetFile: descriptor.targetFile,
+        position: descriptor.position,
+        gTestType: descriptor.gTestType,
+        testCaseType: TestCaseType.File
+    };
+    const rootItem = testController.createTestItem(baseName, baseName);
+    testMetaData.set(rootItem, rootDescriptor);
+    testController.items.add(rootItem);
+    logger().debug(`Added root fixture ${rootItem.id}`);
+    return rootItem;
+}
+
+function addNewFixture(rootItem: vscode.TestItem, testController: vscode.TestController, descriptor: TestCaseDescriptor) {
+    const newFixture = createFixture(testController, descriptor);
+    rootItem.children.add(newFixture);
+    logger().debug(`Added fixture ${newFixture.id}`);
+    return newFixture;
+}
+
+function addTestCaseToFixture(fixture: vscode.TestItem, testController: vscode.TestController, descriptor: TestCaseDescriptor, document: vscode.TextDocument) {
+    const newTestCase = createTestCaseItem(testController, descriptor, document)
+    fixture.children.add(newTestCase);
+    logger().debug(`Added testcase ${newTestCase.id} to fixture ${fixture.id}`);
+}
+
+function createFixture(testController: vscode.TestController, descriptor: TestCaseDescriptor) {
+    let fixtureDescriptor: TestCaseDescriptor = {
+        fixture: descriptor.fixture,
+        name: descriptor.fixture,
+        id: descriptor.id,
+        target: descriptor.target,
+        targetFile: descriptor.targetFile,
+        position: descriptor.position,
+        gTestType: descriptor.gTestType,
+        testCaseType: TestCaseType.Fixture
+    };
+    const item = testController.createTestItem(descriptor.fixture, descriptor.fixture);
+    testMetaData.set(item, fixtureDescriptor);
+    return item;
+}
+
+function createTestCaseItem(testController: vscode.TestController, descriptor: TestCaseDescriptor, document: vscode.TextDocument) {
+    const item = testController.createTestItem(descriptor.id, descriptor.name, document.uri);
+    descriptor.testCaseType = TestCaseType.Testcase;
+    testMetaData.set(item, descriptor);
+    item.range = descriptor.position;
+    return item;
 }
 
 async function getTestsFromFile(buildFolder: string, document: vscode.TextDocument) {
@@ -92,59 +99,57 @@ async function getTestsFromFile(buildFolder: string, document: vscode.TextDocume
 
     let match;
     while (match = reg.exec(text)) {
-        const startPos = document.positionAt(match.index);
-        const endPos = document.positionAt(match.index + match[0].length);
-        let range = new vscode.Range(startPos, endPos);
-        const macro = match[1];
-        const fixture = match[2];
-        const name = match[3];
-        let gTestType;
-        switch (macro) {
-            case "TEST":
-                gTestType = GTestType.Free;
-                break;
-            case "TEST_F":
-                gTestType = GTestType.Fixture;
-                break;
-            case "TEST_P":
-                gTestType = GTestType.Parameter;
-                break;
-            case "INSTANTIATE_TEST_SUITE_P":
-                //console.log("Found INSTANTIATE_TEST_SUITE_P");
-                //vscode.window.showInformationMessage("Found INSTANTIATE_TEST_SUITE_P");
-                gTestType = GTestType.ParameterSuite
-                    ;
-                break;
-
-            default:
-                gTestType = GTestType.None;
-        }
-        let id = "";
-        if (gTestType === GTestType.Parameter) {
-            id = name + "/" + fixture;
-            //vscode.window.showInformationMessage(`Found INSTANTIATE_TEST_SUITE_P id is ${id}`);
-        }
-        else if (gTestType === GTestType.ParameterSuite) {
-            id = fixture + "/" + name;
-        }
-        else {
-            id = fixture + "." + name;
-        }
-
-        let descriptor: TestCaseDescriptor = {
-            fixture: fixture,
-            name: name,
-            id: id,
-            target: target,
-            targetFile: targetFile,
-            position: range,
-            gTestType: gTestType,
-            testCaseType: TestCaseType.Testcase
-        };
-
+        let descriptor = descriptorFromMatch(target, targetFile, match, document);
         descriptors.push(descriptor);
     }
     return descriptors;
+}
+
+function descriptorFromMatch(target: string, targetFile: string, match: RegExpExecArray, document: vscode.TextDocument) {
+    const startPos = document.positionAt(match.index);
+    const endPos = document.positionAt(match.index + match[0].length);
+    let range = new vscode.Range(startPos, endPos);
+    const macro = match[1];
+    const fixture = match[2];
+    const name = match[3];
+    let gTestType = detectTestCaseType(macro);
+    let id = "";
+    if (gTestType === GTestType.Parameter) {
+        id = name + "/" + fixture;
+    }
+    else if (gTestType === GTestType.ParameterSuite) {
+        id = fixture + "/" + name;
+    }
+    else {
+        id = fixture + "." + name;
+    }
+
+    let descriptor: TestCaseDescriptor = {
+        fixture: fixture,
+        name: name,
+        id: id,
+        target: target,
+        targetFile: targetFile,
+        position: range,
+        gTestType: gTestType,
+        testCaseType: TestCaseType.Testcase
+    };
+    return descriptor;
+}
+
+function detectTestCaseType(testCaseMacro: string) {
+    switch (testCaseMacro) {
+        case "TEST":
+            return GTestType.Free;
+        case "TEST_F":
+            return GTestType.Fixture;
+        case "TEST_P":
+            return GTestType.Parameter;
+        case "INSTANTIATE_TEST_SUITE_P":
+            return GTestType.ParameterSuite
+        default:
+            return GTestType.None;
+    }
 }
 
 async function readTargetFile(buildFolder: string) {

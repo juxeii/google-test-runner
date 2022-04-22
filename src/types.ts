@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 
+export let testMetaData = new WeakMap<vscode.TestItem, TestCaseDescriptor>();
+
 export const enum GTestType {
     None,
     Free,

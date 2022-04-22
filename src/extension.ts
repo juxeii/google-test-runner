@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as fs from 'fs';
-import { TestCaseDescriptor } from './types';
+import * as cfg from './configuration';
 import { targetMappingFileName, buildNinjaFile } from './constants';
 import { execShell } from './system';
 import { createTestController } from './testrun';
@@ -9,8 +8,7 @@ import { parseDocument } from './testdiscovery';
 import { logger } from './logger';
 
 export function activate(context: vscode.ExtensionContext) {
-    const extensionName = context.extension.packageJSON.displayName;
-    logger().info(`${extensionName} activated.`);
+    logger().info(`${cfg.extensionName} activated.`);
     initExtension(context);
 }
 
@@ -19,12 +17,8 @@ function initExtension(context: vscode.ExtensionContext) {
     initComponents(context);
 }
 
-function hasConfigurationChanged(event: vscode.ConfigurationChangeEvent) {
-    return event.affectsConfiguration("googletestrunner.buildFolder");
-}
-
 function initComponents(context: vscode.ExtensionContext) {
-    if (!isConfigurationValid()) {
+    if (!cfg.isConfigurationValid()) {
         showMisConfigurationMessage();
         return;
     }
@@ -52,11 +46,11 @@ function initTestController(context: vscode.ExtensionContext) {
 function initConfigurationListeners(context: vscode.ExtensionContext) {
     let buildNinjaListener = createListenerForNinjaBuildFile(context);
     context.subscriptions.push(buildNinjaListener);
-    let buildFolder = getBuildFolder();
+    let buildFolder = cfg.getBuildFolder();
     logger().info(`Listening to ${buildNinjaFile} file creation/changes in build folder ${buildFolder}.`);
 
     vscode.workspace.onDidChangeConfiguration(event => {
-        if (hasConfigurationChanged(event)) {
+        if (cfg.hasConfigurationChanged(event)) {
             initComponents(context);
         }
     });
@@ -72,28 +66,19 @@ function initDocumentListeners(testController: vscode.TestController) {
 }
 
 function logConfigurationDone() {
-    let buildFolder = getBuildFolder();
+    let buildFolder = cfg.getBuildFolder();
     logger().info(`Configuring GoogleTestRunner with ${buildNinjaFile} in ${buildFolder} done.`);
 }
 
 function showMisConfigurationMessage() {
-    let buildFolder = getBuildFolder();
+    let buildFolder = cfg.getBuildFolder();
     const misconfiguredMsg = `GoogleTestRunner needs the ${buildNinjaFile} file to work. Please run cmake configure at least once with your configured build folder ${buildFolder}.`;
     logger().info(misconfiguredMsg);
     vscode.window.showWarningMessage(misconfiguredMsg)
 }
 
-function isBuildNinjaFilePresent() {
-    let buildNinjaPath = path.join(getBuildFolder(), buildNinjaFile);
-    return fs.existsSync(buildNinjaPath);
-}
-
-function isConfigurationValid() {
-    return isBuildNinjaFilePresent();
-}
-
 function createListenerForNinjaBuildFile(context: vscode.ExtensionContext) {
-    let buildFolder = getBuildFolder();
+    let buildFolder = cfg.getBuildFolder();
     let listener = vscode.workspace.createFileSystemWatcher(
         new vscode.RelativePattern(buildFolder, `${buildNinjaFile}`)
     );
@@ -107,19 +92,6 @@ function createListenerForNinjaBuildFile(context: vscode.ExtensionContext) {
         createTargetMappingFile(buildFolder);
     });
     return listener;
-}
-
-export let testMetaData = new WeakMap<vscode.TestItem, TestCaseDescriptor>();
-
-export function getBuildFolder() {
-    let config = vscode.workspace.getConfiguration("googletestrunner");
-    let buildFolderFromConfig = config.get<string>('buildFolder');
-    let workspaceFolder: string = vscode.workspace.workspaceFolders![0].uri.path;
-    let re = /\$\{workspaceFolder\}/;
-    if (buildFolderFromConfig) {
-        return buildFolderFromConfig.replace(re, workspaceFolder);
-    }
-    return buildFolderFromConfig!;
 }
 
 async function createTargetMappingFile(buildFolder: string) {
