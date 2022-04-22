@@ -15,20 +15,11 @@ export function updateTestControllerFromDocument(document: vscode.TextDocument, 
     });
     const rootItem = addRootItem(testController, document);
     fixtures.forEach((fixtureTestCases, fixtureId) => {
-        const fixtureItem = createItem(testController, fixtureId, document);
-        rootItem.children.add(fixtureItem);
+        const fixtureItem = addFixtureItem(testController, fixtureId, rootItem);
         fixtureTestCases.forEach(testCase => {
-            const testCaseItem = createItem(testController, testCase.name, document);
-            testCaseItem.range = lineNoToRange(testCase.lineNo);
-            logger().debug(`Added item ${testCaseItem.id} to fixtureItem ${fixtureItem.id}`);
-            fixtureItem.children.add(testCaseItem);
+            addTestCaseItem(testController, testCase, document, fixtureItem);
         });
     });
-
-    // const testId = "testId";
-    // const testItem = testController.createTestItem(testId, testId, document.uri);
-    // testItem.range = lineNoToRange(52);
-    // testController.items.add(testItem);
 }
 
 function lineNoToRange(lineNo: number) {
@@ -36,12 +27,19 @@ function lineNoToRange(lineNo: number) {
     return new vscode.Range(position, position);
 }
 
-function createItem(testController: vscode.TestController, itemId: string, document: vscode.TextDocument) {
-    const item = testController.createTestItem(itemId, itemId, document.uri);
+function addTestCaseItem(testController: vscode.TestController, testCase: TestCase, document: vscode.TextDocument, parent: vscode.TestItem) {
+    const testCaseItem = testController.createTestItem(testCase.id, testCase.id, document.uri);
+    testCaseItem.range = lineNoToRange(testCase.lineNo);
+    parent.children.add(testCaseItem);
+    logger().debug(`Added testCaseItem ${testCaseItem.id} to parent ${parent.id}`);
+    return testCaseItem;
+}
 
-    //parent.children.add(item);
-    //logger().debug(`Added item ${itemId} to parent ${parent.id}`);
-    return item;
+function addFixtureItem(testController: vscode.TestController, fixtureId: string, parent: vscode.TestItem) {
+    const fixtureItem = testController.createTestItem(fixtureId, fixtureId);
+    parent.children.add(fixtureItem);
+    logger().debug(`Added fixture item ${fixtureItem.id} to parent ${parent.id}`);
+    return fixtureItem;
 }
 
 function addRootItem(testController: vscode.TestController, document: vscode.TextDocument) {
