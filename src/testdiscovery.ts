@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as cfg from './configuration';
-import { TestCase, GTestType, Fixture, RootFixture } from './types';
-import { testMetaData } from './types';
+import { TestCase, GTestType } from './types';
 import { regexp } from './constants';
 import { logger } from './logger';
 
@@ -11,77 +10,14 @@ export async function parseDocument(document: vscode.TextDocument, testControlle
 
     const buildFolder = cfg.getBuildFolder();
     logger().debug(`Discovering testcases in document ${document.uri}`);
-    testCases = await discoverTestCasesInDocument(buildFolder, document);
+    testCases = await discoverTestCasesInDocument(document);
     if (testCases.length < 1) {
         logger().debug(`No testcases found in document ${document.uri}`);
-    }
-    else {
-        //const rootFixture = await addNewRootFixture(testController, testCases[0], document);
-        //testCases.forEach((testCase) => addTestCaseToController(rootFixture, testController, testCase, document))
     }
     return testCases;
 }
 
-function addTestCaseToController(rootFixture: vscode.TestItem, testController: vscode.TestController, testCase: TestCase, document: vscode.TextDocument) {
-    let fixture = rootFixture.children.get(testCase.fixture);
-    if (!fixture) {
-        fixture = addNewFixture(rootFixture, testController, testCase);
-    }
-    addTestCaseToFixture(fixture, testController, testCase, document);
-}
-
-async function addNewRootFixture(testController: vscode.TestController, testCase: TestCase, document: vscode.TextDocument) {
-    const buildFolder = cfg.getBuildFolder();
-    const target = await getTargetForFile(buildFolder, document);
-    const targetFile = await getTargetFileOfTarget(buildFolder, target);
-    const fixtureId = path.parse(document.uri.path).base;
-    let rootFixture: RootFixture = {
-        id: fixtureId,
-        target: target,
-        targetFile: targetFile,
-        fixtures: []
-    };
-    const rootItem = testController.createTestItem(fixtureId, fixtureId);
-    testMetaData.set(rootItem, rootFixture);
-    testController.items.add(rootItem);
-    logger().debug(`Added root fixture ${rootItem.id}`);
-    return rootItem;
-}
-
-function addNewFixture(rootItem: vscode.TestItem, testController: vscode.TestController, testCase: TestCase) {
-    const newFixture = createFixture(testController, testCase);
-    rootItem.children.add(newFixture);
-    logger().debug(`Added fixture ${newFixture.id}`);
-    return newFixture;
-}
-
-function addTestCaseToFixture(fixture: vscode.TestItem, testController: vscode.TestController, testCase: TestCase, document: vscode.TextDocument) {
-    const newTestCase = createTestCaseItem(testController, testCase, document)
-    fixture.children.add(newTestCase);
-    logger().debug(`Added testcase ${newTestCase.id} to fixture ${fixture.id}`);
-}
-
-function createFixture(testController: vscode.TestController, testCase: TestCase) {
-    let fixtureTestCase: TestCase = {
-        fixture: testCase.fixture,
-        name: testCase.fixture,
-        id: testCase.id,
-        lineNo: testCase.lineNo,
-        gTestType: testCase.gTestType
-    };
-    const item = testController.createTestItem(testCase.fixture, testCase.fixture);
-    testMetaData.set(item, fixtureTestCase);
-    return item;
-}
-
-function createTestCaseItem(testController: vscode.TestController, testCase: TestCase, document: vscode.TextDocument) {
-    const item = testController.createTestItem(testCase.id, testCase.name, document.uri);
-    testMetaData.set(item, testCase);
-    // item.range = testCase.position;
-    return item;
-}
-
-async function discoverTestCasesInDocument(buildFolder: string, document: vscode.TextDocument) {
+async function discoverTestCasesInDocument(document: vscode.TextDocument) {
     const reg = regexp.TESTCASE_REGEXP;
     const text = document.getText();
     const testCases: TestCase[] = [];
@@ -96,9 +32,6 @@ async function discoverTestCasesInDocument(buildFolder: string, document: vscode
 
 function testCaseFromMatch(match: RegExpExecArray, document: vscode.TextDocument) {
     const startPos = document.positionAt(match.index);
-    const endPos = document.positionAt(match.index + match[0].length);
-    //let range = new vscode.Range(startPos, endPos);
-
     const macro = match[1];
     const fixture = match[2];
     const name = match[3];

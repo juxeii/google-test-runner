@@ -51,13 +51,10 @@ async function fillTestControllerWithTestCasesFromDocument(context: vscode.Exten
         return;
     }
     const testCases = await parseDocument(document, testController);
-    if (!testCases) {
-        logger().debug(`No testcases in ${document.uri.path} discovered.`);
+    if (testCases.length < 1) {
         return;
     }
 
-    logger().info(`${testCases.length} testcases in ${document.uri.path} discovered.`);
-    testCases.forEach(testcase => logger().info(`testcase ${testcase.name} discovered.`));
     context.workspaceState.update(document.uri.path, testCases);
     updateTestControllerFromDocument(document, testController, testCases);
 }

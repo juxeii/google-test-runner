@@ -7,15 +7,10 @@ import * as cfg from './configuration';
 
 export function updateTestControllerFromDocument(document: vscode.TextDocument, testController: vscode.TestController, testCases: TestCase[]) {
     const fixtures = detectFixtures(testCases);
-    fixtures.forEach((fixtureTestCases, fixture, map) => {
-        logger().info(`Detected fixture ${fixture}`);
-        fixtureTestCases.forEach(testcase => {
-            logger().info(`Detected testcase ${testcase.name} in fixture ${fixture} in line ${testcase.lineNo}`);
-        });
-    });
-    const rootItem = addRootItem(testController, document);
+    const rootItemId = path.parse(document.uri.path).base;
+    const rootItem = addFixtureItem(testController, rootItemId, testController.items);
     fixtures.forEach((fixtureTestCases, fixtureId) => {
-        const fixtureItem = addFixtureItem(testController, fixtureId, rootItem);
+        const fixtureItem = addFixtureItem(testController, fixtureId, rootItem.children);
         fixtureTestCases.forEach(testCase => {
             addTestCaseItem(testController, testCase, document, fixtureItem);
         });
@@ -35,19 +30,11 @@ function addTestCaseItem(testController: vscode.TestController, testCase: TestCa
     return testCaseItem;
 }
 
-function addFixtureItem(testController: vscode.TestController, fixtureId: string, parent: vscode.TestItem) {
+function addFixtureItem(testController: vscode.TestController, fixtureId: string, parent: vscode.TestItemCollection) {
     const fixtureItem = testController.createTestItem(fixtureId, fixtureId);
-    parent.children.add(fixtureItem);
-    logger().debug(`Added fixture item ${fixtureItem.id} to parent ${parent.id}`);
+    parent.add(fixtureItem);
+    logger().debug(`Added fixture item ${fixtureItem.id}`);
     return fixtureItem;
-}
-
-function addRootItem(testController: vscode.TestController, document: vscode.TextDocument) {
-    const rootItemId = path.parse(document.uri.path).base;
-    const rootItem = testController.createTestItem(rootItemId, rootItemId, document.uri);
-    testController.items.add(rootItem);
-    logger().debug(`Added root item ${rootItem.id} to testController`);
-    return rootItem;
 }
 
 function detectFixtures(testCases: TestCase[]) {
