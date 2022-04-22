@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-export let testMetaData = new WeakMap<vscode.TestItem, TestCaseDescriptor>();
+export let testMetaData = new WeakMap<vscode.TestItem, TestCase>();
 
 export const enum GTestType {
     None,
@@ -16,7 +16,7 @@ export const enum TestCaseType {
     Testcase
 }
 
-export type TestCaseDescriptor = {
+export type TestCase = {
     fixture: string;
     name: string;
     id: string,
@@ -27,7 +27,13 @@ export type TestCaseDescriptor = {
     testCaseType: TestCaseType;
 }
 
+export type Fixture = {
+    id: string,
+    target: string;
+    targetFile: string;
+}
+
 export type TestInfo = {
     item: vscode.TestItem;
-    descriptor: TestCaseDescriptor;
+    descriptor: TestCase;
 }

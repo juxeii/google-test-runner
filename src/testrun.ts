@@ -4,7 +4,7 @@ import { testMetaData } from './types';
 import * as rj from './resultjson';
 import * as cfg from './configuration';
 import { spawnShell } from './system';
-import { TestCaseDescriptor, TestCaseType, GTestType, TestInfo } from './types';
+import { TestCase, TestCaseType, GTestType, TestInfo } from './types';
 import { logger } from './logger';
 
 export function createTestController() {
@@ -23,7 +23,6 @@ function fillRunInfoWithItem(item: vscode.TestItem, testInfosByTarget: Map<strin
     if (!descriptor) {
         return;
     }
-    const name = descriptor.name;
     const targetFile = descriptor.targetFile;
     if (!targetFile) {
         return;
@@ -172,11 +171,11 @@ function createRunHandler(testController: vscode.TestController) {
     }
 }
 
-function runFilter(descriptors: TestCaseDescriptor[]) {
+function runFilter(descriptors: TestCase[]) {
     return descriptors.map(createFilterForId).join("");
 }
 
-function createFilterForId(descriptor: TestCaseDescriptor) {
+function createFilterForId(descriptor: TestCase) {
     const gtestType = descriptor.gTestType;
     if (gtestType === GTestType.Parameter || gtestType === GTestType.ParameterSuite) {
         return descriptor.id + '.*:';
