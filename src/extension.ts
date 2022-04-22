@@ -5,6 +5,7 @@ import { targetMappingFileName, buildNinjaFile } from './constants';
 import { execShell } from './system';
 import { createTestController } from './testrun';
 import { parseDocument } from './testdiscovery';
+import { updateTestControllerFromDocument } from './testcontroller';
 import { logger } from './logger';
 
 export function activate(context: vscode.ExtensionContext) {
@@ -24,17 +25,41 @@ function initComponents(context: vscode.ExtensionContext) {
     }
 
     let testController = initTestController(context);
-    initDocumentListeners(testController);
-    parseCurrentEditor(testController);
+    initDocumentListeners(context, testController);
+    parseCurrentEditor(context, testController);
 
     logConfigurationDone();
 }
 
-function parseCurrentEditor(testController: vscode.TestController) {
+function parseCurrentEditor(context: vscode.ExtensionContext, testController: vscode.TestController) {
     const currentWindow = vscode.window.activeTextEditor;
     if (currentWindow) {
-        parseDocument(currentWindow.document, testController);
+        fillTestControllerWithTestCasesFromDocument(context, currentWindow.document, testController);
     }
+}
+
+function isDocumentValidForParsing(document: vscode.TextDocument) {
+    if (document.uri.scheme != 'file') {
+        return false;
+    }
+    const languageName = document.languageId;
+    return languageName && languageName === "cpp";
+}
+
+async function fillTestControllerWithTestCasesFromDocument(context: vscode.ExtensionContext, document: vscode.TextDocument, testController: vscode.TestController) {
+    if (!isDocumentValidForParsing(document)) {
+        return;
+    }
+    const testCases = await parseDocument(document, testController);
+    if (!testCases) {
+        logger().debug(`No testcases in ${document.uri.path} discovered.`);
+        return;
+    }
+
+    logger().info(`${testCases.length} testcases in ${document.uri.path} discovered.`);
+    testCases.forEach(testcase => logger().info(`testcase ${testcase.name} discovered.`));
+    context.workspaceState.update(document.uri.path, testCases);
+    updateTestControllerFromDocument(document, testController, testCases);
 }
 
 function initTestController(context: vscode.ExtensionContext) {
@@ -56,9 +81,15 @@ function initConfigurationListeners(context: vscode.ExtensionContext) {
     });
 }
 
-function initDocumentListeners(testController: vscode.TestController) {
-    vscode.workspace.onDidOpenTextDocument(document => parseDocument(document, testController));
-    vscode.workspace.onDidSaveTextDocument(document => parseDocument(document, testController));
+function initDocumentListeners(context: vscode.ExtensionContext, testController: vscode.TestController) {
+    vscode.workspace.onDidOpenTextDocument(document => {
+        //logger().info(`onDidOpenTextDocument ${document.uri}`);
+        fillTestControllerWithTestCasesFromDocument(context, document, testController);
+    });
+    vscode.workspace.onDidSaveTextDocument(document => {
+        //logger().info(`onDidSaveTextDocument ${document.uri}`);
+        fillTestControllerWithTestCasesFromDocument(context, document, testController);
+    });
     vscode.workspace.onDidCloseTextDocument(document => {
         const baseName = path.parse(document.uri.path).base;
         testController.items.delete(baseName);

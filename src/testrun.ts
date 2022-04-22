@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { testMetaData } from './types';
+import { Fixture, testMetaData } from './types';
 import * as rj from './resultjson';
 import * as cfg from './configuration';
 import { spawnShell } from './system';
-import { TestCase, TestCaseType, GTestType, TestInfo } from './types';
+import { TestCase, GTestType, TestInfo } from './types';
 import { logger } from './logger';
 
 export function createTestController() {
@@ -13,36 +13,60 @@ export function createTestController() {
     return testController;
 }
 
+function testInfoFromTestCase(testCase: TestCase, item: vscode.TestItem) {
+    const testInfo: TestInfo = { item: item, testcase: testCase };
+    return testInfo;
+}
+
+function testInfosFromFixture(fixture: Fixture, item: vscode.TestItem) {
+    return fixture.testcases.map(testcase => testInfoFromTestCase(testcase, item));
+}
+
+function testInfosFromFixtures(fixtures: Fixture[], item: vscode.TestItem) {
+    // return fixture.testcases.map(testcase => testInfoFromTestCase(testcase, item));
+}
+
 function fillRunInfoWithItem(item: vscode.TestItem, testInfosByTarget: Map<string, TestInfo[]>) {
-    const itemType = testMetaData.get(item)?.testCaseType;
-    if (itemType === TestCaseType.File || itemType === TestCaseType.Fixture) {
+    const metaData = testMetaData.get(item)!;
+    if ("target" in metaData) {
         item.children.forEach(item => fillRunInfoWithItem(item, testInfosByTarget))
         return;
     }
-    const descriptor = testMetaData.get(item);
-    if (!descriptor) {
-        return;
-    }
-    const targetFile = descriptor.targetFile;
-    if (!targetFile) {
-        return;
-    }
-    logger().debug(`Adding test item ${item.id} to run info.`);
 
-    const testInfo: TestInfo = { item: item, descriptor: descriptor };
-    if (!testInfosByTarget.has(targetFile)) {
-        let testInfos: TestInfo[] = [];
-        testInfos.push(testInfo);
-        logger().info(`creating map entry for targetFile ${targetFile}`);
-        testInfosByTarget.set(targetFile, testInfos);
-    }
-    else {
-        let t = testInfosByTarget.get(targetFile);
-        if (t) {
-            t.push(testInfo);
-            testInfosByTarget.set(targetFile, t);
-        }
-    }
+    // const itemType = testMetaData.get(item)?.testCaseType;
+    // if (itemType === TestCaseType.File || itemType === TestCaseType.Fixture) {
+    //     item.children.forEach(item => fillRunInfoWithItem(item, testInfosByTarget))
+    //     return;
+    // }
+    // const descriptor = testMetaData.get(item);
+    // if (!descriptor) {
+    //     return;
+    // }
+    // const targetFile = descriptor.targetFile;
+    // if (!targetFile) {
+    //     return;
+    // }
+    // const isTestCase = "gTestType" in metaData;
+    // console.log(metaData instanceof TestCase);
+    // if (metaData instanceof TestCase) {
+
+    // }
+    // logger().debug(`Adding test item ${item.id} to run info.`);
+
+    // const testInfo: TestInfo = { item: item, testcase: descriptor };
+    // if (!testInfosByTarget.has(targetFile)) {
+    //     let testInfos: TestInfo[] = [];
+    //     testInfos.push(testInfo);
+    //     logger().info(`creating map entry for targetFile ${targetFile}`);
+    //     testInfosByTarget.set(targetFile, testInfos);
+    // }
+    // else {
+    //     let t = testInfosByTarget.get(targetFile);
+    //     if (t) {
+    //         t.push(testInfo);
+    //         testInfosByTarget.set(targetFile, t);
+    //     }
+    // }
 }
 
 function buildTargets(testController: vscode.TestController, testInfosByTarget: Map<string, TestInfo[]>, request: vscode.TestRunRequest) {
@@ -84,7 +108,7 @@ async function runTargets(testController: vscode.TestController, buildFolder: st
     }
 
     testInfosByTarget.forEach((testInfos, targetFile, map) => {
-        const filter = runFilter(testInfos.map(testInfo => testInfo.descriptor));
+        const filter = runFilter(testInfos.map(testInfo => testInfo.testcase));
         const jsonFileName = "test_detail_for_" + path.parse(targetFile).base;
         runTarget(targetFile, filter, jsonFileName, testInfos);
     });
@@ -154,20 +178,7 @@ function createRunHandler(testController: vscode.TestController) {
         const targetsWithSpaces = Array.from(testInfosByTarget.keys(), targetFileName => path.parse(targetFileName).base).join(' ');
         logger().info(`Building required targets ${targetsWithSpaces}`);
         const cmd = `cd ${buildFolder} && ninja ${targetsWithSpaces}`;
-        spawnShell(cmd, () => {
-            if (!buildFailed) {
-                logger().info(`Building required targets ${targetsWithSpaces} done.`);
-                runTargets(testController, buildFolder, request, testInfosByTarget);
-            }
-        }, (line) => {
-            let buildFailure = /ninja: build stopped/;
-            if (buildFailure.exec(line)) {
-                logger().info(`Building targets failed!. No testcases were executed!`);
-                buildFailed = true;
-            }
-            else
-                logger().info(`${line}`);
-        });
+        buildTargets(testController, testInfosByTarget, request);
     }
 }
 
