@@ -15,6 +15,15 @@ type RootRunItems = {
     testcases: Set<vscode.TestItem>;
 }
 
+type RunEnvironment = {
+    testController: vscode.TestController;
+    request: vscode.TestRunRequest;
+    runConfiguration: Map<string, TargetInfo>;
+    requestedItems: vscode.TestItem[];
+    rootRunItemsById: Map<string, RootRunItems>;
+}
+
+
 export function createTestController(runConfiguration: Map<string, TargetInfo>) {
     let testController = vscode.tests.createTestController('GoogleTestController', 'GoogleTestController');
     testController.createRunProfile('Run Tests', vscode.TestRunProfileKind.Run, createRunHandler(testController, runConfiguration), true);
@@ -68,14 +77,22 @@ function createRunHandler(testController: vscode.TestController, runConfiguratio
                 return targetName;
             });
 
-        buildTests(targets, () => onBuildDone(testController, request, rootRunItemsById, runConfiguration), () => logger().info(`Build failed, damn!`));
+        let runEnvironment: RunEnvironment = {
+            testController: testController,
+            request: request,
+            runConfiguration: runConfiguration,
+            requestedItems: requestedItems,
+            rootRunItemsById: rootRunItemsById
+        }
+
+        buildTests(targets, () => onBuildDone(runEnvironment), () => logger().info(`Build failed, damn!`));
     }
 }
 
 function createRunFilter(runItems: RootRunItems) {
     if (runItems.fixtures.size === 0 && runItems.testcases.size === 0) {
         logger().debug(`No filter for ${runItems.rootId} needed`);
-        return '';
+        return '*';
     }
     let filter = '';
     runItems.fixtures.forEach(fixture => {
@@ -99,64 +116,97 @@ function createRunFilter(runItems: RootRunItems) {
 }
 
 
-function onBuildDone(testController: vscode.TestController, request: vscode.TestRunRequest, rootRunItemsById: Map<string, RootRunItems>, runConfiguration: Map<string, TargetInfo>) {
+function onBuildDone(runEnvironment: RunEnvironment) {
     logger().info('Starting test run...');
-    const run = testController.createTestRun(request);
+    const run = runEnvironment.testController.createTestRun(runEnvironment.request);
     // Get execution files from TargetInfo. TargetInfo is in runConfiguration
-    Array.from(rootRunItemsById.values()).map(rootRunItems => {
+
+    let noOfRuns = 0;
+    let runsCompletedEmitter = new vscode.EventEmitter<void>();
+    let runCompletedListener = runsCompletedEmitter.event(() => {
+        ++noOfRuns;
+        logger().info(`noOfRuns ${noOfRuns}`);
+        if (noOfRuns == runEnvironment.rootRunItemsById.size) {
+            onAllRunsCompleted(run);
+            runCompletedListener.dispose();
+        }
+    });
+
+    Array.from(runEnvironment.rootRunItemsById.values()).forEach(rootRunItems => {
         logger().info(`rootRunItems.rootId is ${rootRunItems.rootId}`);
         const targetFile = runConfiguration.get(rootRunItems.rootId)!.targetFile;
         logger().info(`targetFile is targetFile ${targetFile}`);
         const filter = createRunFilter(rootRunItems);
         const baseName = path.parse(rootRunItems.rootId).name;
         const jsonResultFile = `test_detail_for_${baseName}`;
-        runTarget(targetFile, filter, jsonResultFile);
+        runTarget(runEnvironment, targetFile, filter, jsonResultFile, run, runsCompletedEmitter);
     });
-
-    run.end();
-    logger().info('Test run finished.');
 }
 
-function runTarget(targetFile: string, filter: string, jsonResultFile: string) {
-    //const cmd = `cd ${cfg.getBuildFolder()} && ` + targetFile + ` --gtest_filter=${filter} --gtest_output=json:${jsonFileName}`;
-    const cmd = `cd ${cfg.getBuildFolder()} && ` + targetFile + ` --gtest_filter=${filter} --gtest_output=json:${jsonResultFile}`;
+function runTarget(runEnvironment: RunEnvironment, targetFile: string, filter: string, jsonResultFile: string, run: vscode.TestRun, runsCompletedEmitter: vscode.EventEmitter<void>) {
+    const cmd = `cd ${cfg.getBuildFolder()} && ${targetFile} --gtest_filter=${filter} --gtest_output=json:${jsonResultFile}`;
     spawnShell(cmd, (code) => {
-        onTestTargetRunDone();
+        onJSONResultAvailable(runEnvironment, jsonResultFile, run, runsCompletedEmitter);
     }, (err) => onTestTargetRunFailed());
-}
-
-function onTestTargetRunDone() {
-    logger().info('onTestTargetRun');
 }
 
 function onTestTargetRunFailed() {
     logger().info('onTestTargetRun failed');
 }
 
-async function onJSONResultAvailable(buildFolder: string, jsonFileName: string, run: vscode.TestRun, testInfos: TestInfo[]) {
-    const jsonResultUri = vscode.Uri.file(`${buildFolder} /${jsonFileName}`);
-    let itemById = new Map<string, vscode.TestItem>()
-    testInfos.forEach(testInfo => itemById.set(testInfo.item.id, testInfo.item));
+function onAllRunsCompleted(run: vscode.TestRun) {
+    run.end();
+    logger().info('All test runs completed.');
+}
 
-    await rj.forEachTestCase(jsonResultUri, (testcase, testsuite) => {
-        let testCaseName = testcase.name;
-        logger().info(`testCaseName ${testCaseName}`);
+function reportToTestCaseIdMapping(report: rj.TestCaseReport) {
+    let testCaseIdMapping = new Map<string, rj.TestCase>();
+    report.testSuites.forEach(fixture => {
+        fixture.testCases.forEach(testCase => {
+            if (testCase.valueParameter) {
+                const id = fixture.name;
+                logger().debug(`Id ${id} created for item ${testCase.name}`);
+                testCaseIdMapping.set(id, testCase);
+            }
+            else {
+                const id = fixture.name + "." + testCase.name;
+                logger().debug(`Id ${id} created for item ${testCase.name}`);
+                testCaseIdMapping.set(id, testCase);
+            }
+        });
+    });
+    return testCaseIdMapping;
+}
 
-        let testCaseId = rj.testcaseId(testcase, testsuite);
-        let item = itemById.get(testCaseId);
-        if (item) {
-            let failures = testcase.failures;
-            if (!failures) {
+
+async function onJSONResultAvailable(runEnvironment: RunEnvironment, jsonResultFile: string, run: vscode.TestRun, runsCompletedEmitter: vscode.EventEmitter<void>) {
+    const buildFolder = cfg.getBuildFolder();
+    const jsonResultFileUri = vscode.Uri.file(path.join(buildFolder, jsonResultFile));
+    logger().debug(`jsonResultFileUri ${jsonResultFileUri}`);
+    const testReport = await rj.createTestReportFromJSONFile(jsonResultFileUri);
+    const testCaseIdMapping = reportToTestCaseIdMapping(testReport);
+
+    function evalItem(item: vscode.TestItem) {
+        if (item.children.size > 0) {
+            item.children.forEach(evalItem);
+        }
+        logger().debug(`Looking for test result of item ${item.id}`);
+        const testCase = testCaseIdMapping.get(item.id);
+        if (testCase) {
+            logger().debug(`Testcase result found for ${item.id}`);
+            if (testCase.failures.length === 0) {
                 processPassedTestcase(run, item);
             }
             else {
-                processFailedTestcase(run, item, failures);
+                processFailedTestcase(run, item, testCase.failures[0]);
             }
         }
         else {
-            logger().error(`Testcase item for id ${testCaseId} not found!`);
+            logger().error(`Testcase item for id ${item.id} not found!`);
         }
-    });
+    }
+    runEnvironment.requestedItems.forEach(evalItem)
+    runsCompletedEmitter.fire();
 }
 
 function processPassedTestcase(run: vscode.TestRun, item: vscode.TestItem) {
@@ -164,18 +214,18 @@ function processPassedTestcase(run: vscode.TestRun, item: vscode.TestItem) {
     run.passed(item);
 }
 
-function processFailedTestcase(run: vscode.TestRun, item: vscode.TestItem, failures: any) {
+function processFailedTestcase(run: vscode.TestRun, item: vscode.TestItem, failure: rj.TestFailure) {
     logger().info(`Testcase ${item.id} failed.`);
-    const failureMessage: string = failures[0].failure;
-    const failureMessageForDocument = createFailureMessageForDocument(item, failureMessage);
-    let lineNo = rj.lineNumberFromFailureMessage(failureMessage);
-    failureMessageForDocument.location = new vscode.Location(item.uri!, new vscode.Position(lineNo, 0));
+    const failureMessage: string = failure.message;
+    const failureMessageForDocument = createFailureMessageForDocument(item, failureMessage, failure);
+    //let lineNo = failure.lineNo;
+    //failureMessageForDocument.location = new vscode.Location(item.uri!, new vscode.Position(lineNo, 0));
     run.failed(item, failureMessageForDocument);
 }
 
-function createFailureMessageForDocument(item: vscode.TestItem, failureMessage: string) {
+function createFailureMessageForDocument(item: vscode.TestItem, failureMessage: string, failure: rj.TestFailure) {
     const message = new vscode.TestMessage(failureMessage.substring(failureMessage.indexOf("\n") + 1));
-    let lineNo = rj.lineNumberFromFailureMessage(failureMessage);
+    const lineNo = failure.lineNo;
     message.location = new vscode.Location(item.uri!, new vscode.Position(lineNo, 0));
     return message;
 }

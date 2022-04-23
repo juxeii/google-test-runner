@@ -31,7 +31,15 @@ function initExtension(context: vscode.ExtensionContext) {
 function onNewBuildFolder(context: vscode.ExtensionContext, testController: vscode.TestController) {
     buildNinjaListener.dispose();
     buildNinjaListener = createBuildNinjaListener(context, testController);
+    resetStatus(testController);
     processConfigurationStatus(context, testController);
+}
+
+function resetStatus(testController: vscode.TestController) {
+    const noItems: vscode.TestItem[] = [];
+    testController.items.replace(noItems);
+    runConfiguration.clear();
+    noTestFiles.clear();
 }
 
 function processConfigurationStatus(context: vscode.ExtensionContext, testController: vscode.TestController) {
@@ -42,10 +50,7 @@ function processConfigurationStatus(context: vscode.ExtensionContext, testContro
     }
     else {
         showMisConfigurationMessage();
-        const noItems: vscode.TestItem[] = [];
-        testController.items.replace(noItems);
-        runConfiguration.clear();
-        noTestFiles.clear();
+        resetStatus(testController);
     }
 }
 
@@ -159,6 +164,7 @@ function createBuildNinjaListener(context: vscode.ExtensionContext, testControll
     });
     listener.onDidChange(uri => {
         logger().info(`${buildNinjaFile} changed at ${uri}.`);
+        resetStatus(testController);
         createTargetMappingFile();
     });
     listener.onDidDelete(uri => {
