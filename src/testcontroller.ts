@@ -8,9 +8,9 @@ import * as cfg from './configuration';
 export function updateTestControllerFromDocument(document: vscode.TextDocument, testController: vscode.TestController, testCases: TestCase[]) {
     const fixtures = detectFixtures(testCases);
     const rootItemId = path.parse(document.uri.path).base;
-    const rootItem = addFixtureItem(testController, rootItemId, testController.items);
+    const rootItem = addFixtureItem(testController, rootItemId, testController.items, document);
     fixtures.forEach((fixtureTestCases, fixtureId) => {
-        const fixtureItem = addFixtureItem(testController, fixtureId, rootItem.children);
+        const fixtureItem = addFixtureItem(testController, fixtureId, rootItem.children, document);
         fixtureTestCases.forEach(testCase => {
             addTestCaseItem(testController, testCase, document, fixtureItem);
         });
@@ -30,8 +30,8 @@ function addTestCaseItem(testController: vscode.TestController, testCase: TestCa
     return testCaseItem;
 }
 
-function addFixtureItem(testController: vscode.TestController, fixtureId: string, parent: vscode.TestItemCollection) {
-    const fixtureItem = testController.createTestItem(fixtureId, fixtureId);
+function addFixtureItem(testController: vscode.TestController, fixtureId: string, parent: vscode.TestItemCollection, document: vscode.TextDocument) {
+    const fixtureItem = testController.createTestItem(fixtureId, fixtureId, document.uri);
     parent.add(fixtureItem);
     logger().debug(`Added fixture item ${fixtureItem.id}`);
     return fixtureItem;

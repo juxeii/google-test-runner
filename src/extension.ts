@@ -12,7 +12,7 @@ import { createTargetInfoForDocument } from './runconfig';
 
 
 let buildNinjaListener: vscode.FileSystemWatcher;
-export let runConfiguration = new Map<vscode.Uri, TargetInfo>();
+export let runConfiguration = new Map<string, TargetInfo>();
 let noTestFiles = new Set<vscode.Uri>();
 
 export function activate(context: vscode.ExtensionContext) {
@@ -37,8 +37,6 @@ function onNewBuildFolder(context: vscode.ExtensionContext, testController: vsco
 function processConfigurationStatus(context: vscode.ExtensionContext, testController: vscode.TestController) {
     if (cfg.isConfigurationValid()) {
         createTargetMappingFile();
-        let editors = vscode.window.visibleTextEditors;
-        editors.forEach(e => logger().info(`Visible ${e.document.uri}`));
         parseCurrentEditor(context, testController);
         logConfigurationDone();
     }
@@ -68,7 +66,8 @@ function isDocumentValidForParsing(document: vscode.TextDocument) {
         return false;
     }
 
-    if (runConfiguration.has(document.uri) && !document.isDirty) {
+    const baseName = path.parse(document.uri.path).base;
+    if (runConfiguration.has(baseName) && !document.isDirty) {
         return false;
     }
 
@@ -85,10 +84,12 @@ async function fillTestControllerWithTestCasesFromDocument(context: vscode.Exten
     }
 
     //context.workspaceState.update(document.uri.path, testCases);
+    noTestFiles.delete(document.uri);
     updateTestControllerFromDocument(document, testController, testCases);
     logger().debug(`Current testcontroller item size ${testController.items.size}`);
     let targetInfo = await createTargetInfoForDocument(document, testController);
-    runConfiguration.set(document.uri, targetInfo);
+    const baseName = path.parse(document.uri.path).base;
+    runConfiguration.set(baseName, targetInfo);
 }
 
 function initTestController(context: vscode.ExtensionContext) {

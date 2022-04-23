@@ -1,9 +1,16 @@
 import * as cp from "child_process";
+import { logger } from './logger';
 
-export async function spawnShell(cmd: string, onDone: (code: number) => any, logFn: (line: string) => any) {
+export async function spawnShell(cmd: string, onDone: (code: number) => any, onError: (line: string) => any, logFn?: (line: string) => any) {
+    logger().debug(`Executing shell command: ${cmd}`);
     const ls = cp.spawn(cmd, { shell: true });
-    ls.stdout.on('data', logFn);
-    ls.stderr.on('data', logFn);
+    ls.stdout.on('data', data => {
+        if (logFn) {
+            logFn(data);
+        }
+        logger().debug(`${data}`);
+    });
+    ls.stderr.on('data', onError);
     ls.on('close', onDone);
 }
 
