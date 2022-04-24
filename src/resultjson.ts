@@ -10,6 +10,8 @@ export type TestFailure =
 export type TestCase =
     {
         name: string;
+        fixture: string;
+        id: string;
         valueParameter: string | undefined;
         line: number;
         timestamp: string;
@@ -44,7 +46,6 @@ export async function createTestReportFromJSONFile(resultJSONUri: vscode.Uri) {
 
 function fillTestReport(parsedJSON: any) {
     logger().debug(`fillTestReport`);
-    logger().debug(`parsedJSON.testsuites.testsuite.length ${parsedJSON.testsuites[0].testsuite.length}`);
     const testCaseReport: TestCaseReport = {
         tests: parsedJSON.tests,
         failures: parsedJSON.failures,
@@ -91,7 +92,6 @@ name ${testSuiteJSON.name}`);
 function fillTestCases(testSuiteJSON: Array<any>) {
     logger().debug(`fillTestCases len ${testSuiteJSON.length}`);
     return mapJSONArray(testSuiteJSON, testCaseJSON => {
-        logger().debug(`fillTestCases1`);
         const valueParameter = testCaseJSON.valueParameter ? testCaseJSON.valueParameter : undefined;
         logger().debug(`fillTestCases1.1`);
 
@@ -102,6 +102,8 @@ function fillTestCases(testSuiteJSON: Array<any>) {
         const testCase: TestCase =
         {
             name: testCaseJSON.name,
+            fixture: testCaseJSON.fixture,
+            id: testCaseId(testCaseJSON),
             valueParameter: valueParameter,
             line: testCaseJSON.line,
             timestamp: testCaseJSON.timestamp,
@@ -169,13 +171,15 @@ function forEachTestSuite(testsuites: Array<any>, handler: (testsuite: any) => v
 //     }
 // }
 
-function testcaseId(testcase: any, testsuite: any) {
+function testCaseId(testcase: any) {
     const testCaseName = testcase.name;
-    const testSuiteName: string = testsuite.name;
-    if (isParameterizedTestcase(testcase)) {
-        return testSuiteName;
-    }
-    return testSuiteName + "." + testCaseName;
+    const fixtureName = testcase.classname;
+    //const testSuiteName: string = testsuite.name;
+    // if (isParameterizedTestcase(testcase)) {
+    //     return fixtureName;
+    // }
+    logger().debug(`ID is ${fixtureName + "." + testCaseName}`);
+    return fixtureName + "." + testCaseName;
 }
 
 function lineNumberFromFailureMessage(failureMessage: string) {

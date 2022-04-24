@@ -206,6 +206,7 @@ async function onJSONResultAvailable(runEnvironment: RunEnvironment, jsonResultF
         }
     }
     runEnvironment.requestedItems.forEach(evalItem)
+    logger().debug(`Firing result evalutaion end`);
     runsCompletedEmitter.fire();
 }
 

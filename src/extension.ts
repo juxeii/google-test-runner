@@ -4,11 +4,12 @@ import * as cfg from './configuration';
 import { targetMappingFileName, buildNinjaFile } from './constants';
 import { execShell } from './system';
 import { createTestController } from './testrun';
-import { parseDocument } from './testdiscovery';
+import { discoverGTestMacros } from './macrodiscovery';
 import { updateTestControllerFromDocument } from './testcontroller';
 import { logger } from './logger';
 import { TargetInfo } from './types';
 import { createTargetInfoForDocument } from './runconfig';
+import { discoverTestCasesFromMacros } from './testdiscovery';
 
 
 let buildNinjaListener: vscode.FileSystemWatcher;
@@ -45,8 +46,8 @@ function resetStatus(testController: vscode.TestController) {
 function processConfigurationStatus(context: vscode.ExtensionContext, testController: vscode.TestController) {
     if (cfg.isConfigurationValid()) {
         createTargetMappingFile();
-        parseCurrentEditor(context, testController);
         logConfigurationDone();
+        parseCurrentEditor(context, testController);
     }
     else {
         showMisConfigurationMessage();
@@ -81,20 +82,20 @@ function isDocumentValidForParsing(document: vscode.TextDocument) {
 }
 
 async function fillTestControllerWithTestCasesFromDocument(context: vscode.ExtensionContext, document: vscode.TextDocument, testController: vscode.TestController) {
-    const testCases = await parseDocument(document, testController);
+    const macros = await discoverGTestMacros(document);
+    const testCases = discoverTestCasesFromMacros(macros);
     if (testCases.length < 1) {
         noTestFiles.add(document.uri);
         logger().debug(`Adding ${document.uri} to set of files with no tests.`);
         return;
     }
 
-    //context.workspaceState.update(document.uri.path, testCases);
     noTestFiles.delete(document.uri);
     updateTestControllerFromDocument(document, testController, testCases);
-    logger().debug(`Current testcontroller item size ${testController.items.size}`);
-    let targetInfo = await createTargetInfoForDocument(document, testController);
-    const baseName = path.parse(document.uri.path).base;
-    runConfiguration.set(baseName, targetInfo);
+    // logger().debug(`Current testcontroller item size ${testController.items.size}`);
+    // let targetInfo = await createTargetInfoForDocument(document, testController);
+    // const baseName = path.parse(document.uri.path).base;
+    // runConfiguration.set(baseName, targetInfo);
 }
 
 function initTestController(context: vscode.ExtensionContext) {
