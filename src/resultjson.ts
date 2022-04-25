@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { logger } from './logger';
+import { logDebug } from './logger';
 
 export type TestFailure =
     {
@@ -26,7 +26,7 @@ export async function createTestReportById(resultJSONUri: vscode.Uri) {
 
     const testReportById = createTestReports(parsedJSON);
     testReportById.forEach((reports, id) => {
-        logger().debug(`Testreport with id ${id} passed ${reports[0].hasPassed}`);
+        logDebug(`Testreport with id ${id} passed ${reports[0].hasPassed}`);
     });
 
     return testReportById;
@@ -35,14 +35,13 @@ export async function createTestReportById(resultJSONUri: vscode.Uri) {
 async function parse(resultJSONUri: vscode.Uri) {
     const jsonResultRaw = await vscode.workspace.fs.readFile(resultJSONUri);
     const jsonResult = jsonResultRaw.toString();
-    logger().debug(`JSON result ${jsonResult}`);
     return JSON.parse(jsonResult);
 }
 
 function createTestReports(parsedJSON: any) {
     let testReportById = new Map<string, TestReport[]>();
     mapJSONArray(parsedJSON.testsuites, testSuiteJSON => {
-        logger().debug(`Processing testSuiteJSON ${testSuiteJSON.name}`);
+        logDebug(`Processing testSuiteJSON ${testSuiteJSON.name}`);
 
         mapJSONArray(testSuiteJSON.testsuite, testCaseJSON => {
             let parameter = undefined;
@@ -70,7 +69,7 @@ function createTestReports(parsedJSON: any) {
                 hasPassed: failures.length === 0,
                 failures: failures
             }
-            logger().debug(`Processing testCaseJSON ${testCaseJSON.name} with id ${testReport.id}`);
+            logDebug(`Processing testCaseJSON ${testCaseJSON.name} with id ${testReport.id}`);
 
             let currentTestReports = testReportById.get(testReport.id);
             if (!currentTestReports) {
@@ -85,7 +84,7 @@ function createTestReports(parsedJSON: any) {
 }
 
 function fillFailures(failuresJSON: Array<any>, paramName: string): TestFailure[] {
-    logger().debug(`fillFailures len ${fillFailures.length}`);
+    logDebug(`fillFailures len ${fillFailures.length}`);
     return mapJSONArray(failuresJSON, failureJSON => {
         const testFailure: TestFailure =
         {
@@ -93,7 +92,7 @@ function fillFailures(failuresJSON: Array<any>, paramName: string): TestFailure[
             lineNo: lineNumberFromFailureMessage(failureJSON.failure),
             param: paramName
         }
-        logger().debug(`TestFailure structure \
+        logDebug(`TestFailure structure \
 message ${failureJSON.message} \
 lineNo ${failureJSON.lineNo}`);
         return testFailure;

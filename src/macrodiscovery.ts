@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { logger } from './logger';
+import { logDebug } from './logger';
 import { GTestMacro, GTestMacroType } from './types';
 
 const GTESTMACRO_REGEXP = /^\b(TEST|TEST_F|TEST_P|TYPED_TEST|TYPED_TEST_P|INSTANTIATE_TEST_SUITE_P|INSTANTIATE_TYPED_TEST_SUITE_P)\(\s*(\w+),\s*(\w+)/gm
@@ -15,7 +15,7 @@ const gTestMacroTypeByMacroName = new Map<string, GTestMacroType>([
 ]);
 
 export async function discoverGTestMacros(document: vscode.TextDocument) {
-    logger().debug(`Discovering gtest macros in document ${document.uri}`);
+    logDebug(`Discovering gtest macros in document ${document.uri}`);
     return discoverMacrosInDocument(document);
 }
 
@@ -39,6 +39,6 @@ function macroFromMatch(match: RegExpExecArray, document: vscode.TextDocument) {
         id: match[3],
         lineNo: matchPosition.line + 1
     };
-    logger().debug(`Macro name ${match[1]} fixture ${macro.fixture} id ${macro.id}`);
+    logDebug(`Macro name ${match[1]} fixture ${macro.fixture} id ${macro.id}`);
     return macro;
 }

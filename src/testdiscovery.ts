@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { TestCase, GTestType, GTestMacro, GTestMacroType } from './types';
-import { logger } from './logger';
+import { logDebug } from './logger';
 
 const gTestTypeByMacroName = new Map<GTestMacroType, GTestType>([
     [GTestMacroType.TEST, GTestType.TEST],
@@ -18,7 +18,7 @@ export type MacroByTypes = {
 }
 
 export function discoverTestCasesFromMacros(gTestMacros: GTestMacro[]) {
-    logger().debug(`Discovering testcases from gtest macros.`);
+    logDebug(`Discovering testcases from gtest macros.`);
     let macroByTypes: MacroByTypes = {
         testCases: [],
         parameterSuites: [],
@@ -26,7 +26,7 @@ export function discoverTestCasesFromMacros(gTestMacros: GTestMacro[]) {
     };
     gTestMacros.forEach(item => {
         if (item.type === GTestMacroType.INSTANTIATE_TEST_SUITE_P) {
-            logger().debug(`Pushing paramItem with suite name ${item.fixture}`);
+            logDebug(`Pushing paramItem with suite name ${item.fixture}`);
             macroByTypes.parameterSuites.push(item);
         }
         else if (item.type === GTestMacroType.INSTANTIATE_TYPED_TEST_SUITE_P) {
@@ -58,7 +58,7 @@ export function discoverTestCasesFromMacros(gTestMacros: GTestMacro[]) {
         return testCase;
     });
     testCases.forEach(tc => {
-        logger().debug(`Discovered testcase name ${tc.name} fixture ${tc.fixture} id ${tc.id} lineNo ${tc.lineNo} `);
+        logDebug(`Discovered testcase name ${tc.name} fixture ${tc.fixture} id ${tc.id} lineNo ${tc.lineNo} `);
     });
     return testCases;
 }

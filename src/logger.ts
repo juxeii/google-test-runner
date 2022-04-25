@@ -1,55 +1,20 @@
 import * as vscode from 'vscode';
+import winston = require('winston');
 import * as Transport from 'winston-transport';
 import { createLogger, format } from "winston";
-import winston = require('winston');
 const { MESSAGE } = require("triple-beam");
 
-let loggerImpl: winston.Logger | undefined;
-
-export function logger() {
-    if (loggerImpl) {
-        return loggerImpl;
-    }
-
-    let outputChannel = vscode.window.createOutputChannel('GoogleTestRunner');
-    loggerImpl = createLogger({
-        levels: customizedLogLevels(),
-        level: logLevelFromConfig(),
-        transports: [new OutputChannelTransport(outputChannel)],
-        format: format.combine(
-            format.timestamp(),
-            format.printf(({ timestamp, level, message }) => {
-                return `[${timestamp}] ${level.toUpperCase()}: ${message}`;
-            })
-        ),
-    });
-    return loggerImpl;
+export function logInfo(message: string) {
+    loggerImpl.info(message);
 }
 
-function customizedLogLevels() {
-    const customLevels = {
-        levels: {
-            'debug': 3,
-            'info': 2,
-            'warn': 1,
-            'error': 0,
-        }
-    };
-    return customLevels.levels;
+export function logDebug(message: string) {
+    loggerImpl.debug(message);
 }
 
-export function logLevelFromConfig() {
-    let config = vscode.workspace.getConfiguration('googletestrunner');
-    return config.get<string>('logLevel')!;
+export function logError(message: string) {
+    loggerImpl.error(message);
 }
-
-export enum LogLevel {
-    ERROR = 2,
-    WARNING = 1,
-    INFO = 0,
-    DEBUG = -1,
-}
-
 class OutputChannelTransport extends Transport {
     outputChannel: vscode.OutputChannel;
 
@@ -77,3 +42,29 @@ class OutputChannelTransport extends Transport {
     }
 };
 
+let outputChannel = vscode.window.createOutputChannel('GoogleTestRunner');
+
+let loggerImpl: winston.Logger = createLogger({
+    levels: customizedLogLevels(),
+    level: logLevel(),
+    transports: [new OutputChannelTransport(outputChannel)],
+    format: format.combine(
+        format.timestamp(),
+        format.printf(({ timestamp, level, message }) => `[${timestamp}] ${level.toUpperCase()}: ${message}`)
+    ),
+});
+
+function customizedLogLevels() {
+    return {
+        levels: {
+            'debug': 2,
+            'info': 1,
+            'error': 0,
+        }
+    }.levels;
+}
+
+function logLevel() {
+    const config = vscode.workspace.getConfiguration('googletestrunner');
+    return config.get<string>('logLevel')!;
+}

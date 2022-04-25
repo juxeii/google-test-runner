@@ -6,18 +6,19 @@ import { execShell } from './system';
 import { createTestController } from './testrun';
 import { discoverGTestMacros } from './macrodiscovery';
 import { updateTestControllerFromDocument } from './testcontroller';
-import { logger } from './logger';
+import { logDebug, logInfo } from './logger';
 import { TargetInfo } from './types';
 import { createTargetInfoForDocument } from './runconfig';
 import { discoverTestCasesFromMacros } from './testdiscovery';
 
 
-let buildNinjaListener: vscode.FileSystemWatcher;
 export let runConfiguration = new Map<string, TargetInfo>();
+export let targetMappingFileContents = '';
+let buildNinjaListener: vscode.FileSystemWatcher;
 let noTestFiles = new Set<vscode.Uri>();
 
 export function activate(context: vscode.ExtensionContext) {
-    logger().info(`${cfg.extensionName} activated.`);
+    logInfo(`${cfg.extensionName} activated.`);
     initExtension(context);
 }
 
@@ -43,9 +44,10 @@ function resetStatus(testController: vscode.TestController) {
     noTestFiles.clear();
 }
 
-function processConfigurationStatus(context: vscode.ExtensionContext, testController: vscode.TestController) {
+async function processConfigurationStatus(context: vscode.ExtensionContext, testController: vscode.TestController) {
     if (cfg.isConfigurationValid()) {
         createTargetMappingFile();
+        targetMappingFileContents = await contentsOfTargetMappingFile();
         logConfigurationDone();
         parseCurrentEditor(context, testController);
     }
@@ -68,7 +70,7 @@ function isDocumentValidForParsing(document: vscode.TextDocument) {
     }
 
     if (noTestFiles.has(document.uri)) {
-        logger().debug(`File ${document.uri} has no tests. No need to reparse.`);
+        logDebug(`File ${document.uri} has no tests. No need to reparse.`);
         return false;
     }
 
@@ -86,20 +88,20 @@ async function fillTestControllerWithTestCasesFromDocument(context: vscode.Exten
     const testCases = discoverTestCasesFromMacros(macros);
     if (testCases.length < 1) {
         noTestFiles.add(document.uri);
-        logger().debug(`Adding ${document.uri} to set of files with no tests.`);
+        logDebug(`Adding ${document.uri} to set of files with no tests.`);
         return;
     }
 
     noTestFiles.delete(document.uri);
     updateTestControllerFromDocument(document, testController, testCases);
-    logger().debug(`Current testcontroller item size ${testController.items.size}`);
+    logDebug(`Current testcontroller item size ${testController.items.size}`);
     let targetInfo = await createTargetInfoForDocument(document, testController);
     const baseName = path.parse(document.uri.path).base;
     runConfiguration.set(baseName, targetInfo);
 }
 
 function initTestController(context: vscode.ExtensionContext) {
-    let testController = createTestController(runConfiguration);
+    let testController = createTestController();
     context.subscriptions.push(testController);
     return testController;
 }
@@ -118,18 +120,18 @@ function initDocumentListeners(context: vscode.ExtensionContext, testController:
         if (!editor) {
             return;
         }
-        logger().debug(`onDidChangeActiveTextEditor ${editor.document.uri}`);
+        logDebug(`onDidChangeActiveTextEditor ${editor.document.uri}`);
         if (!isDocumentValidForParsing(editor.document)) {
             return;
         }
         fillTestControllerWithTestCasesFromDocument(context, editor.document, testController);
     });
     // let openTextDocumentListener = vscode.workspace.onDidOpenTextDocument(document => {
-    //     logger().debug(`onDidOpenTextDocument ${document.uri.path}`);
+    //     logDebug(`onDidOpenTextDocument ${document.uri.path}`);
     //     fillTestControllerWithTestCasesFromDocument(context, document, testController);
     // });
     let saveTextDocumentListener = vscode.workspace.onDidSaveTextDocument(document => {
-        logger().debug(`onDidSaveTextDocument ${document.uri}`);
+        logDebug(`onDidSaveTextDocument ${document.uri}`);
         fillTestControllerWithTestCasesFromDocument(context, document, testController);
     });
     let closeTextDocumentListener = vscode.workspace.onDidCloseTextDocument(document => {
@@ -144,13 +146,13 @@ function initDocumentListeners(context: vscode.ExtensionContext, testController:
 
 function logConfigurationDone() {
     let buildFolder = cfg.getBuildFolder();
-    logger().info(`Configuring GoogleTestRunner with ${buildNinjaFile} in ${buildFolder} done.`);
+    logInfo(`Configuring GoogleTestRunner with ${buildNinjaFile} in ${buildFolder} done.`);
 }
 
 function showMisConfigurationMessage() {
     let buildFolder = cfg.getBuildFolder();
     const misconfiguredMsg = `GoogleTestRunner needs the ${buildNinjaFile} file to work. Please run cmake configure at least once with your configured build folder ${buildFolder}.`;
-    logger().info(misconfiguredMsg);
+    logInfo(misconfiguredMsg);
     vscode.window.showWarningMessage(misconfiguredMsg)
 }
 
@@ -160,26 +162,33 @@ function createBuildNinjaListener(context: vscode.ExtensionContext, testControll
         new vscode.RelativePattern(buildFolder, `${buildNinjaFile}`)
     );
     listener.onDidCreate(uri => {
-        logger().info(`${buildNinjaFile} created at ${uri}.`);
+        logInfo(`${buildNinjaFile} created at ${uri}.`);
         onNewBuildFolder(context, testController);
     });
     listener.onDidChange(uri => {
-        logger().info(`${buildNinjaFile} changed at ${uri}.`);
+        logInfo(`${buildNinjaFile} changed at ${uri}.`);
         resetStatus(testController);
         createTargetMappingFile();
     });
     listener.onDidDelete(uri => {
-        logger().info(`${buildNinjaFile} deleted ${uri}.`);
+        logInfo(`${buildNinjaFile} deleted ${uri}.`);
         processConfigurationStatus(context, testController);
     });
     context.subscriptions.push(listener);
-    logger().info(`Listening to ${buildNinjaFile} file creation/changes in build folder ${buildFolder}.`);
+    logInfo(`Listening to ${buildNinjaFile} file creation/changes in build folder ${buildFolder}.`);
     return listener;
 }
 
 function createTargetMappingFile() {
     const buildFolder = cfg.getBuildFolder();
     execShell(`cd ${buildFolder} && ninja -t targets all > ${targetMappingFileName}`);
+}
+
+async function contentsOfTargetMappingFile() {
+    const buildFolder = cfg.getBuildFolder()
+    const targetMappingUri = vscode.Uri.file(path.join(buildFolder, targetMappingFileName));
+    const rawContents = await vscode.workspace.fs.readFile(targetMappingUri);
+    return rawContents.toString();
 }
 
 export function deactivate() {

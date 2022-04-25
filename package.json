@@ -30,7 +30,6 @@
                     "enum": [
                         "debug",
                         "info",
-                        "warn",
                         "error"
                     ],
                     "default": "info"

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { logger } from './logger';
+import { logDebug } from './logger';
 import { TestCase } from './types';
 
 
@@ -10,11 +10,11 @@ export function updateTestControllerFromDocument(document: vscode.TextDocument, 
     const fixtures = detectFixtures(testCases);
 
     fixtures.forEach((fixtureTestCases, fixtureId) => processFixture(fixtureTestCases, fixtureId, testController, rootItem, document));
-    logger().debug(` rootItem.children size ${rootItem.children.size} tescases ${testCases.length}`);
+    logDebug(` rootItem.children size ${rootItem.children.size} tescases ${testCases.length}`);
 }
 
 function processFixture(fixtureTestCases: TestCase[], fixtureId: string, testController: vscode.TestController, rootItem: vscode.TestItem, document: vscode.TextDocument) {
-    logger().debug(`Fixture is ${fixtureId}`);
+    logDebug(`Fixture is ${fixtureId}`);
     if (fixtureTestCases.length > 1) {
         const fixtureItem = addFixtureItem(testController, fixtureId, rootItem.children, document);
         fixtureTestCases.forEach(testCase => {
@@ -35,14 +35,14 @@ function addTestCaseItem(testController: vscode.TestController, testCase: TestCa
     const testCaseItem = testController.createTestItem(testCase.id, testCase.id, document.uri);
     testCaseItem.range = lineNoToRange(testCase.lineNo - 1);
     parent.children.add(testCaseItem);
-    logger().debug(`Added testCaseItem ${testCaseItem.id} to parent ${parent.id}`);
+    logDebug(`Added testCaseItem ${testCaseItem.id} to parent ${parent.id}`);
     return testCaseItem;
 }
 
 function addFixtureItem(testController: vscode.TestController, fixtureId: string, parent: vscode.TestItemCollection, document: vscode.TextDocument) {
     const fixtureItem = testController.createTestItem(fixtureId, fixtureId, document.uri);
     parent.add(fixtureItem);
-    logger().debug(`Added fixture item ${fixtureItem.id}`);
+    logDebug(`Added fixture item ${fixtureItem.id}`);
     return fixtureItem;
 }
 
@@ -53,11 +53,18 @@ function detectFixtures(testCases: TestCase[]) {
 }
 
 function addTestCaseToFixture(testCase: TestCase, testCasesByFixture: Map<string, TestCase[]>) {
-    const fixtureName = testCase.fixture;
-    let currentTestCases = testCasesByFixture.get(fixtureName);
-    if (!currentTestCases) {
-        currentTestCases = [];
+    const fixtureName = testCase.id.match(/[^\.]*/)![0];
+    if (fixtureName) {
+        logDebug(`fixtureName regex matched ${fixtureName}`);
+        logDebug(`Fixture id for adding testcase ${testCase.id} is ${fixtureName}`);
+        let currentTestCases = testCasesByFixture.get(fixtureName);
+        if (!currentTestCases) {
+            currentTestCases = [];
+        }
+        currentTestCases.push(testCase);
+        testCasesByFixture.set(fixtureName, currentTestCases);
     }
-    currentTestCases.push(testCase);
-    testCasesByFixture.set(fixtureName, currentTestCases);
+    else {
+        logDebug(`testCase.fixture did not match regex for ${testCase.fixture}`);
+    }
 }
