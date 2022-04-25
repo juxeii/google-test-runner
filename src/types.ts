@@ -33,8 +33,3 @@ export type TestCase = {
     lineNo: number;
     gTestType: GTestType;
 }
-
-export type TargetInfo = {
-    target: string;
-    targetFile: string;
-}

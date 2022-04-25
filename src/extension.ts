@@ -7,14 +7,13 @@ import { createTestController } from './testrun';
 import { discoverGTestMacros } from './macrodiscovery';
 import { updateTestControllerFromDocument } from './testcontroller';
 import { logDebug, logInfo } from './logger';
-import { TargetInfo } from './types';
-import { createTargetInfoForDocument } from './runconfig';
 import { discoverTestCasesFromMacros } from './testdiscovery';
+import { lastPathOfDocumentUri } from './utils';
 
 
-export let runConfiguration = new Map<string, TargetInfo>();
 export let targetMappingFileContents = '';
 let buildNinjaListener: vscode.FileSystemWatcher;
+let parsedFiles = new Set<vscode.Uri>();
 let noTestFiles = new Set<vscode.Uri>();
 
 export function activate(context: vscode.ExtensionContext) {
@@ -40,7 +39,7 @@ function onNewBuildFolder(context: vscode.ExtensionContext, testController: vsco
 function resetStatus(testController: vscode.TestController) {
     const noItems: vscode.TestItem[] = [];
     testController.items.replace(noItems);
-    runConfiguration.clear();
+    parsedFiles.clear();
     noTestFiles.clear();
 }
 
@@ -74,8 +73,7 @@ function isDocumentValidForParsing(document: vscode.TextDocument) {
         return false;
     }
 
-    const baseName = path.parse(document.uri.path).base;
-    if (runConfiguration.has(baseName) && !document.isDirty) {
+    if (parsedFiles.has(document.uri) && !document.isDirty) {
         return false;
     }
 
@@ -95,9 +93,7 @@ async function fillTestControllerWithTestCasesFromDocument(context: vscode.Exten
     noTestFiles.delete(document.uri);
     updateTestControllerFromDocument(document, testController, testCases);
     logDebug(`Current testcontroller item size ${testController.items.size}`);
-    let targetInfo = await createTargetInfoForDocument(document, testController);
-    const baseName = path.parse(document.uri.path).base;
-    runConfiguration.set(baseName, targetInfo);
+    parsedFiles.add(document.uri);
 }
 
 function initTestController(context: vscode.ExtensionContext) {
@@ -135,7 +131,7 @@ function initDocumentListeners(context: vscode.ExtensionContext, testController:
         fillTestControllerWithTestCasesFromDocument(context, document, testController);
     });
     let closeTextDocumentListener = vscode.workspace.onDidCloseTextDocument(document => {
-        const baseName = path.parse(document.uri.path).base;
+        const baseName = lastPathOfDocumentUri(document.uri);
         testController.items.delete(baseName);
     })
     context.subscriptions.push(activeTextEditorListener);
