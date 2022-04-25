@@ -10,7 +10,7 @@ export function getTargetForDocument(targetFileContents: string, uri: vscode.Uri
     return fileMatch![0];
 }
 
-export function getTargetFileForUri(uri: vscode.Uri) {
+export function getTargetFileForDocument(uri: vscode.Uri) {
     const buildFolder = cfg.getBuildFolder();
     const target = getTargetForDocument(targetMappingFileContents, uri);
     const targetMappingFileMatchRegEx = new RegExp("(.+" + target + "): (?:CXX_EXECUTABLE_LINKER__).*(?:" + target + ").*");

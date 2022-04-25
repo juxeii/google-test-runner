@@ -1,5 +1,3 @@
-import * as vscode from 'vscode';
-
 export const enum GTestType {
     TEST,
     TEST_F,

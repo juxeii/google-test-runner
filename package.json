@@ -35,13 +35,7 @@
                     "default": "info"
                 }
             }
-        },
-        "commands": [
-            {
-                "command": "googletestrunner.helloWorld",
-                "title": "Hello World"
-            }
-        ]
+        }
     },
     "scripts": {
         "vscode:prepublish": "npm run compile",

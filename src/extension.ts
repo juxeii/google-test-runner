@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as cfg from './configuration';
-import { targetMappingFileName, buildNinjaFile } from './constants';
 import { execShell } from './system';
 import { createTestController } from './testrun';
 import { discoverGTestMacros } from './macrodiscovery';
@@ -10,11 +9,12 @@ import { logDebug, logInfo } from './logger';
 import { discoverTestCasesFromMacros } from './testdiscovery';
 import { lastPathOfDocumentUri } from './utils';
 
-
+export const buildNinjaFile = "build.ninja";
 export let targetMappingFileContents = '';
 let buildNinjaListener: vscode.FileSystemWatcher;
 let parsedFiles = new Set<vscode.Uri>();
 let noTestFiles = new Set<vscode.Uri>();
+const targetMappingFileName = "targets.out";
 
 export function activate(context: vscode.ExtensionContext) {
     logInfo(`${cfg.extensionName} activated.`);
@@ -45,8 +45,7 @@ function resetStatus(testController: vscode.TestController) {
 
 async function processConfigurationStatus(context: vscode.ExtensionContext, testController: vscode.TestController) {
     if (cfg.isConfigurationValid()) {
-        createTargetMappingFile();
-        targetMappingFileContents = await contentsOfTargetMappingFile();
+        await loadTargetMappings();
         logConfigurationDone();
         parseCurrentEditor(context, testController);
     }
@@ -164,7 +163,7 @@ function createBuildNinjaListener(context: vscode.ExtensionContext, testControll
     listener.onDidChange(uri => {
         logInfo(`${buildNinjaFile} changed at ${uri}.`);
         resetStatus(testController);
-        createTargetMappingFile();
+        loadTargetMappings();
     });
     listener.onDidDelete(uri => {
         logInfo(`${buildNinjaFile} deleted ${uri}.`);
@@ -175,16 +174,23 @@ function createBuildNinjaListener(context: vscode.ExtensionContext, testControll
     return listener;
 }
 
-function createTargetMappingFile() {
-    const buildFolder = cfg.getBuildFolder();
-    execShell(`cd ${buildFolder} && ninja -t targets all > ${targetMappingFileName}`);
-}
-
-async function contentsOfTargetMappingFile() {
+async function loadTargetMappings() {
+    createTargetMappingFile();
     const buildFolder = cfg.getBuildFolder()
     const targetMappingUri = vscode.Uri.file(path.join(buildFolder, targetMappingFileName));
     const rawContents = await vscode.workspace.fs.readFile(targetMappingUri);
-    return rawContents.toString();
+    const unfilteredText = rawContents.toString()
+
+    const lineFilterRegExp = /(CXX_COMPILER__|CXX_EXECUTABLE_LINKER__)/;
+    targetMappingFileContents = unfilteredText.split('\n').filter(line => line.match(lineFilterRegExp)).join('\n');
+
+    logDebug(`unfilteredText size ${unfilteredText.length} targetMappingFileContents size ${targetMappingFileContents.length}`);
+}
+
+async function createTargetMappingFile() {
+    const buildFolder = cfg.getBuildFolder();
+    await execShell(`cd ${buildFolder} && ninja -t targets all > ${targetMappingFileName}`);
+    logDebug(`Created target mappings file ${targetMappingFileName}`);
 }
 
 export function deactivate() {

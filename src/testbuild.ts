@@ -15,11 +15,9 @@ export async function buildTests(targets: Array<string>, onBuildDone: () => void
 function processExitCode(code: number, onBuildDone: () => void, onBuildFailed: () => void) {
     logDebug(`Build exited with code ${code}`);
     if (code === 1) {
-        logInfo(`Building targets failed!. No testcases were executed!`);
         onBuildFailed();
     }
     else {
-        logInfo(`Building test executables done.`);
         onBuildDone();
     }
 }

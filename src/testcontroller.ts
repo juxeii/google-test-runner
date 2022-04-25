@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { logDebug } from './logger';
+import { logDebug, logError } from './logger';
 import { TestCase } from './types';
 
 
@@ -10,16 +10,16 @@ export function updateTestControllerFromDocument(document: vscode.TextDocument, 
     const fixtures = detectFixtures(testCases);
 
     fixtures.forEach((fixtureTestCases, fixtureId) => processFixture(fixtureTestCases, fixtureId, testController, rootItem, document));
-    logDebug(` rootItem.children size ${rootItem.children.size} tescases ${testCases.length}`);
 }
 
-function processFixture(fixtureTestCases: TestCase[], fixtureId: string, testController: vscode.TestController, rootItem: vscode.TestItem, document: vscode.TextDocument) {
-    logDebug(`Fixture is ${fixtureId}`);
+function processFixture(fixtureTestCases: TestCase[],
+    fixtureId: string,
+    testController: vscode.TestController,
+    rootItem: vscode.TestItem,
+    document: vscode.TextDocument) {
     if (fixtureTestCases.length > 1) {
         const fixtureItem = addFixtureItem(testController, fixtureId, rootItem.children, document);
-        fixtureTestCases.forEach(testCase => {
-            addTestCaseItem(testController, testCase, document, fixtureItem);
-        });
+        fixtureTestCases.forEach(testCase => addTestCaseItem(testController, testCase, document, fixtureItem));
     }
     else {
         addTestCaseItem(testController, fixtureTestCases[0], document, rootItem);
@@ -55,8 +55,7 @@ function detectFixtures(testCases: TestCase[]) {
 function addTestCaseToFixture(testCase: TestCase, testCasesByFixture: Map<string, TestCase[]>) {
     const fixtureName = testCase.id.match(/[^\.]*/)![0];
     if (fixtureName) {
-        logDebug(`fixtureName regex matched ${fixtureName}`);
-        logDebug(`Fixture id for adding testcase ${testCase.id} is ${fixtureName}`);
+        logDebug(`Fixture id testcase ${testCase.id} is ${fixtureName}`);
         let currentTestCases = testCasesByFixture.get(fixtureName);
         if (!currentTestCases) {
             currentTestCases = [];
@@ -65,6 +64,6 @@ function addTestCaseToFixture(testCase: TestCase, testCasesByFixture: Map<string
         testCasesByFixture.set(fixtureName, currentTestCases);
     }
     else {
-        logDebug(`testCase.fixture did not match regex for ${testCase.fixture}`);
+        logError(`testCase.fixture did not match regex for ${testCase.fixture}`);
     }
 }
