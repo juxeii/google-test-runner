@@ -92,10 +92,10 @@ async function fillTestControllerWithTestCasesFromDocument(context: vscode.Exten
 
     noTestFiles.delete(document.uri);
     updateTestControllerFromDocument(document, testController, testCases);
-    // logger().debug(`Current testcontroller item size ${testController.items.size}`);
-    // let targetInfo = await createTargetInfoForDocument(document, testController);
-    // const baseName = path.parse(document.uri.path).base;
-    // runConfiguration.set(baseName, targetInfo);
+    logger().debug(`Current testcontroller item size ${testController.items.size}`);
+    let targetInfo = await createTargetInfoForDocument(document, testController);
+    const baseName = path.parse(document.uri.path).base;
+    runConfiguration.set(baseName, targetInfo);
 }
 
 function initTestController(context: vscode.ExtensionContext) {

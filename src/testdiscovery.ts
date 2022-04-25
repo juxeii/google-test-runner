@@ -17,7 +17,7 @@ export type MacroByTypes = {
     typedParameterSuites: GTestMacro[];
 }
 
-export function discoverTestCasesFromMacros(gTestMacros: GTestMacro[]): TestCase[] {
+export function discoverTestCasesFromMacros(gTestMacros: GTestMacro[]) {
     logger().debug(`Discovering testcases from gtest macros.`);
     let macroByTypes: MacroByTypes = {
         testCases: [],
@@ -46,13 +46,16 @@ export function discoverTestCasesFromMacros(gTestMacros: GTestMacro[]): TestCase
         }
         return true;
     }).map(macro => {
-        return {
+        const { id, regExpForId } = createTestCaseId(macro, macroByTypes);
+        let testCase: TestCase = {
             fixture: macro.fixture,
             name: macro.id,
-            id: createTestCaseId(macro, macroByTypes),
+            id: id,
+            regExpForId: regExpForId,
             lineNo: macro.lineNo,
             gTestType: gTestTypeByMacroName.get(macro.type)!
         }
+        return testCase;
     });
     testCases.forEach(tc => {
         logger().debug(`Discovered testcase name ${tc.name} fixture ${tc.fixture} id ${tc.id} lineNo ${tc.lineNo} `);
@@ -67,16 +70,25 @@ function createTestCaseId(macro: GTestMacro, macroByTypes: MacroByTypes) {
         const paramSuite = macroByTypes.parameterSuites.find(ps => {
             return ps.id === macro.fixture;
         })!;
-        return paramSuite.fixture + '/' + fixtureName + '.' + testCaseName + '/*';
+        const id = paramSuite.fixture + '/' + fixtureName + '.' + testCaseName + '/*';
+        const regExpForId = new RegExp(`${paramSuite.fixture}\/${fixtureName}\.${testCaseName}\/\d+`);
+        return { id, regExpForId }
     }
     if (macro.type === GTestMacroType.TYPED_TEST) {
-        return fixtureName + '/*.' + testCaseName;
+        const id = fixtureName + '/*.' + testCaseName;
+        const regExpForId = new RegExp(`${fixtureName}\/\d+\.${testCaseName}`);
+        return { id, regExpForId }
     }
     if (macro.type === GTestMacroType.TYPED_TEST_P) {
         const paramTypeSuite = macroByTypes.typedParameterSuites.find(tps => {
             return tps.id === macro.fixture;
         })!;
-        return paramTypeSuite.fixture + '/' + fixtureName + '/*.' + testCaseName;
+        const id = paramTypeSuite.fixture + '/' + fixtureName + '/*.' + testCaseName;
+        const regExpForId = new RegExp(`${paramTypeSuite.fixture}\/${fixtureName}\/\d+\.${testCaseName}`);
+        return { id, regExpForId }
     }
-    return fixtureName + '.' + testCaseName;
+
+    const id = fixtureName + '.' + testCaseName;
+    const regExpForId = new RegExp(`${fixtureName}\.${testCaseName}`);
+    return { id, regExpForId };
 }

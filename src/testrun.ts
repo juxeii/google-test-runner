@@ -159,46 +159,31 @@ function onAllRunsCompleted(run: vscode.TestRun) {
     logger().info('All test runs completed.');
 }
 
-function reportToTestCaseIdMapping(report: rj.TestCaseReport) {
-    let testCaseIdMapping = new Map<string, rj.TestCase>();
-    report.testSuites.forEach(fixture => {
-        fixture.testCases.forEach(testCase => {
-            if (testCase.valueParameter) {
-                const id = fixture.name;
-                logger().debug(`Id ${id} created for item ${testCase.name}`);
-                testCaseIdMapping.set(id, testCase);
-            }
-            else {
-                const id = fixture.name + "." + testCase.name;
-                logger().debug(`Id ${id} created for item ${testCase.name}`);
-                testCaseIdMapping.set(id, testCase);
-            }
-        });
-    });
-    return testCaseIdMapping;
-}
-
-
 async function onJSONResultAvailable(runEnvironment: RunEnvironment, jsonResultFile: string, run: vscode.TestRun, runsCompletedEmitter: vscode.EventEmitter<void>) {
     const buildFolder = cfg.getBuildFolder();
     const jsonResultFileUri = vscode.Uri.file(path.join(buildFolder, jsonResultFile));
     logger().debug(`jsonResultFileUri ${jsonResultFileUri}`);
-    const testReport = await rj.createTestReportFromJSONFile(jsonResultFileUri);
-    const testCaseIdMapping = reportToTestCaseIdMapping(testReport);
+    const testReportById = await rj.createTestReportById(jsonResultFileUri);
+
+    //let itemResultById = new Map<string, >();
 
     function evalItem(item: vscode.TestItem) {
         if (item.children.size > 0) {
             item.children.forEach(evalItem);
         }
         logger().debug(`Looking for test result of item ${item.id}`);
-        const testCase = testCaseIdMapping.get(item.id);
-        if (testCase) {
-            logger().debug(`Testcase result found for ${item.id}`);
-            if (testCase.failures.length === 0) {
+        const testReports = testReportById.get(item.id);
+        if (testReports) {
+            logger().debug(`Testrepor found for ${item.id}`);
+            const testCaseFailures = testReports.filter(report => {
+                return !report.hasPassed;
+            });
+
+            if (testCaseFailures.length === 0) {
                 processPassedTestcase(run, item);
             }
             else {
-                processFailedTestcase(run, item, testCase.failures[0]);
+                processFailedTestcase(run, item, testCaseFailures[0].failures[0]);
             }
         }
         else {
@@ -217,7 +202,10 @@ function processPassedTestcase(run: vscode.TestRun, item: vscode.TestItem) {
 
 function processFailedTestcase(run: vscode.TestRun, item: vscode.TestItem, failure: rj.TestFailure) {
     logger().info(`Testcase ${item.id} failed.`);
-    const failureMessage: string = failure.message;
+    let failureMessage = failure.message;
+    if (failure.param) {
+        failureMessage += '\n' + `Failure parameter: ${failure.param}`;
+    }
     const failureMessageForDocument = createFailureMessageForDocument(item, failureMessage, failure);
     //let lineNo = failure.lineNo;
     //failureMessageForDocument.location = new vscode.Location(item.uri!, new vscode.Position(lineNo, 0));

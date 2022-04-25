@@ -1,35 +1,29 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { GTestType, TestCase } from './types';
 import { logger } from './logger';
-import * as cfg from './configuration';
+import { TestCase } from './types';
 
 
 export function updateTestControllerFromDocument(document: vscode.TextDocument, testController: vscode.TestController, testCases: TestCase[]) {
-    const fixtures = detectFixtures(testCases);
     const rootItemId = path.parse(document.uri.path).base;
     const rootItem = addFixtureItem(testController, rootItemId, testController.items, document);
-    let alreadyAddedItems: Set<TestCase> = new Set();
-    fixtures.forEach((fixtureTestCases, fixtureId) => {
-        logger().debug(`Fixture is ${fixtureId}`);
+    const fixtures = detectFixtures(testCases);
+
+    fixtures.forEach((fixtureTestCases, fixtureId) => processFixture(fixtureTestCases, fixtureId, testController, rootItem, document));
+    logger().debug(` rootItem.children size ${rootItem.children.size} tescases ${testCases.length}`);
+}
+
+function processFixture(fixtureTestCases: TestCase[], fixtureId: string, testController: vscode.TestController, rootItem: vscode.TestItem, document: vscode.TextDocument) {
+    logger().debug(`Fixture is ${fixtureId}`);
+    if (fixtureTestCases.length > 1) {
         const fixtureItem = addFixtureItem(testController, fixtureId, rootItem.children, document);
         fixtureTestCases.forEach(testCase => {
             addTestCaseItem(testController, testCase, document, fixtureItem);
-            alreadyAddedItems.add(testCase);
         });
-    });
-
-    testCases.filter(item => !alreadyAddedItems.has(item)).
-        forEach(testCase => {
-            logger().debug(`testCaseid ${testCase.id} testCase.lineNo ${testCase.lineNo} gTestType ${testCase.gTestType}`);
-            if (testController.items.get(testCase.id)) {
-                logger().debug(`Already added.`);
-                return;
-            }
-            logger().debug(`Adding it.`);
-            addTestCaseItem(testController, testCase, document, rootItem);
-        });
-    logger().debug(` rootItem.children size ${rootItem.children.size} tescases ${testCases.length}`);
+    }
+    else {
+        addTestCaseItem(testController, fixtureTestCases[0], document, rootItem);
+    }
 }
 
 function lineNoToRange(lineNo: number) {
@@ -52,20 +46,18 @@ function addFixtureItem(testController: vscode.TestController, fixtureId: string
     return fixtureItem;
 }
 
-function detectFixtures(testCases: TestCase[]): Map<string, TestCase[]> {
+function detectFixtures(testCases: TestCase[]) {
     let testCasesByFixture = new Map<string, TestCase[]>();
-    testCases.forEach(testCase => {
-        if (testCase.gTestType === GTestType.TEST_P || testCase.gTestType === GTestType.TYPED_TEST || testCase.gTestType === GTestType.TYPED_TEST_P) {
-            return;
-        }
-        const fixtureName = testCase.fixture;
-        let currentTestCases = testCasesByFixture.get(fixtureName);
-        if (!currentTestCases) {
-            currentTestCases = [];
-        }
-        currentTestCases.push(testCase);
-        testCasesByFixture.set(fixtureName, currentTestCases);
-    });
+    testCases.forEach(testCase => addTestCaseToFixture(testCase, testCasesByFixture));
+    return testCasesByFixture;
+}
 
-    return new Map([...testCasesByFixture].filter(([, testCases]) => testCases.length > 1));
+function addTestCaseToFixture(testCase: TestCase, testCasesByFixture: Map<string, TestCase[]>) {
+    const fixtureName = testCase.fixture;
+    let currentTestCases = testCasesByFixture.get(fixtureName);
+    if (!currentTestCases) {
+        currentTestCases = [];
+    }
+    currentTestCases.push(testCase);
+    testCasesByFixture.set(fixtureName, currentTestCases);
 }

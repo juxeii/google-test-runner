@@ -30,7 +30,8 @@ export type GTestMacro = {
 export type TestCase = {
     fixture: string;
     name: string;
-    id: string,
+    id: string;
+    regExpForId: RegExp;
     lineNo: number;
     gTestType: GTestType;
 }
