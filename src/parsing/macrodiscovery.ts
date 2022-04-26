@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { logDebug } from './logger';
-import { GTestMacro, GTestMacroType } from './types';
+import { logDebug } from '../utils/logger';
+import { GTestMacro, GTestMacroType } from '../types';
 
 const GTESTMACRO_REGEXP = /^\b(TEST|TEST_F|TEST_P|TYPED_TEST|TYPED_TEST_P|INSTANTIATE_TEST_SUITE_P|INSTANTIATE_TYPED_TEST_SUITE_P)\(\s*(\w+),\s*(\w+)/gm
 

@@ -1,13 +1,11 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
-import * as cfg from './configuration';
-import { execShell } from './system';
-import { createTestController } from './testrun';
-import { discoverGTestMacros } from './macrodiscovery';
-import { updateTestControllerFromDocument } from './testcontroller';
-import { logDebug, logInfo } from './logger';
-import { discoverTestCasesFromMacros } from './testdiscovery';
-import { lastPathOfDocumentUri } from './utils';
+import * as cfg from './utils/configuration';
+import { createTestController } from './testrun/testrun';
+import { discoverGTestMacros } from './parsing/macrodiscovery';
+import { updateTestControllerFromDocument } from './testrun/testcontroller';
+import { logDebug, logInfo } from './utils/logger';
+import { discoverTestCasesFromMacros } from './parsing/testdiscovery';
+import { lastPathOfDocumentUri, loadTargetMappings } from './utils/utils';
 
 export const buildNinjaFile = "build.ninja";
 export let targetMappingFileContents = '';
@@ -45,7 +43,7 @@ function resetStatus(testController: vscode.TestController) {
 
 async function processConfigurationStatus(context: vscode.ExtensionContext, testController: vscode.TestController) {
     if (cfg.isConfigurationValid()) {
-        await loadTargetMappings();
+        await getTargetMappings();
         logConfigurationDone();
         parseCurrentEditor(context, testController);
     }
@@ -121,10 +119,6 @@ function initDocumentListeners(context: vscode.ExtensionContext, testController:
         }
         fillTestControllerWithTestCasesFromDocument(context, editor.document, testController);
     });
-    // let openTextDocumentListener = vscode.workspace.onDidOpenTextDocument(document => {
-    //     logDebug(`onDidOpenTextDocument ${document.uri.path}`);
-    //     fillTestControllerWithTestCasesFromDocument(context, document, testController);
-    // });
     let saveTextDocumentListener = vscode.workspace.onDidSaveTextDocument(document => {
         logDebug(`onDidSaveTextDocument ${document.uri}`);
         fillTestControllerWithTestCasesFromDocument(context, document, testController);
@@ -134,7 +128,6 @@ function initDocumentListeners(context: vscode.ExtensionContext, testController:
         testController.items.delete(baseName);
     })
     context.subscriptions.push(activeTextEditorListener);
-    //context.subscriptions.push(openTextDocumentListener);
     context.subscriptions.push(saveTextDocumentListener);
     context.subscriptions.push(closeTextDocumentListener);
 }
@@ -163,7 +156,7 @@ function createBuildNinjaListener(context: vscode.ExtensionContext, testControll
     listener.onDidChange(uri => {
         logInfo(`${buildNinjaFile} changed at ${uri}.`);
         resetStatus(testController);
-        loadTargetMappings();
+        getTargetMappings();
     });
     listener.onDidDelete(uri => {
         logInfo(`${buildNinjaFile} deleted ${uri}.`);
@@ -174,23 +167,8 @@ function createBuildNinjaListener(context: vscode.ExtensionContext, testControll
     return listener;
 }
 
-async function loadTargetMappings() {
-    await createTargetMappingFile();
-    const buildFolder = cfg.getBuildFolder()
-    const targetMappingUri = vscode.Uri.file(path.join(buildFolder, targetMappingFileName));
-    const rawContents = await vscode.workspace.fs.readFile(targetMappingUri);
-    const unfilteredText = rawContents.toString()
-
-    const lineFilterRegExp = /(CXX_COMPILER__|CXX_EXECUTABLE_LINKER__)/;
-    targetMappingFileContents = unfilteredText.split('\n').filter(line => line.match(lineFilterRegExp)).join('\n');
-
-    logDebug(`unfilteredText size ${unfilteredText.length} targetMappingFileContents size ${targetMappingFileContents.length}`);
-}
-
-async function createTargetMappingFile() {
-    const buildFolder = cfg.getBuildFolder();
-    await execShell(`cd ${buildFolder} && ninja -t targets all > ${targetMappingFileName}`);
-    logDebug(`Created target mappings file ${targetMappingFileName}`);
+async function getTargetMappings() {
+    targetMappingFileContents = await loadTargetMappings(targetMappingFileName);
 }
 
 export function deactivate() {

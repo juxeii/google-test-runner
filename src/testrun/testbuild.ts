@@ -1,10 +1,10 @@
 
-import * as cfg from './configuration';
-import { ProcessHandler, startProcess } from './system';
-import { logInfo, logDebug } from './logger';
+import * as cfg from '../utils/configuration';
+import { ProcessHandler, startProcess } from '../utils/system';
+import { logInfo, logDebug } from '../utils/logger';
 import { RunEnvironment } from './testrun';
-import { getTargetForDocument } from './utils';
-import { targetMappingFileContents } from './extension';
+import { getTargetForDocument } from '../utils/utils';
+import { targetMappingFileContents } from '../extension';
 
 export function buildTests(runEnvironment: RunEnvironment, handlers: ProcessHandler) {
     const targets = getTargets(runEnvironment).join(" ");

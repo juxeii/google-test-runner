@@ -1,7 +1,5 @@
-import * as vscode from 'vscode';
-import * as path from 'path';
-import { TestCase, GTestType, GTestMacro, GTestMacroType } from './types';
-import { logDebug } from './logger';
+import { logDebug } from '../utils/logger';
+import { TestCase, GTestType, GTestMacro, GTestMacroType } from '../types';
 
 const gTestTypeByMacroName = new Map<GTestMacroType, GTestType>([
     [GTestMacroType.TEST, GTestType.TEST],

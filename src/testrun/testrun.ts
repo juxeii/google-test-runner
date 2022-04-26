@@ -1,10 +1,9 @@
 import * as vscode from 'vscode';
-import * as cfg from './configuration';
-import { ProcessHandler, startProcess } from './system';
-import { logInfo, logDebug, logError } from './logger';
+import { ProcessHandler } from '../utils/system';
+import { logInfo, logDebug } from '../utils/logger';
 import { buildTests } from './testbuild';
 import { evaluateTestResult } from './testevaluation';
-import { RunTask } from './system';
+import { RunTask } from '../utils/system';
 import { createLeafItemsByRoot } from './testcontroller';
 import { runTests } from './testexecution';
 
@@ -115,8 +114,7 @@ function onBuildDone(runEnvironment: RunEnvironment) {
 
     logDebug('Running test executables now...');
     runTests(runEnvironment,
-        rootItem => onTestExecutionDone(rootItem, runEnvironment),
-        rootItem => onTestExecutionDoneFailed(rootItem, runEnvironment.testExecutionEmitter));
+        rootItem => onTestExecutionDone(rootItem, runEnvironment));
 }
 
 function onTestExecutionDone(rootItem: vscode.TestItem, runEnvironment: RunEnvironment) {
@@ -129,14 +127,8 @@ function onTestExecutionDone(rootItem: vscode.TestItem, runEnvironment: RunEnvir
         rootItem => onTestEvaluationFailed(rootItem, runEnvironment.testExecutionEmitter));
 }
 
-function onTestExecutionDoneFailed(rootItem: vscode.TestItem, testExecutionEmitter: vscode.EventEmitter<void>) {
-    logDebug(`Test execution for ${rootItem.uri} failed.`);
-    logDebug(`Firing done event.`);
-    testExecutionEmitter.fire();
-}
-
 function onTestEvaluationDone(rootItem: vscode.TestItem, testExecutionEmitter: vscode.EventEmitter<void>) {
-    logDebug(`Test evaluation for ${rootItem.uri} successful.`);
+    logDebug(`Test evaluation for ${rootItem.uri} finished.`);
     logDebug(`Firing done event.`);
     testExecutionEmitter.fire();
 }

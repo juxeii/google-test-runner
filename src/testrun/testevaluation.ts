@@ -1,30 +1,17 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as rj from './resultjson';
-import * as cfg from './configuration';
+import * as rj from '../resultjson';
+import * as cfg from '../utils/configuration';
 import { RunEnvironment } from './testrun';
-import { logInfo, logDebug, logError } from './logger';
-import { lastPathOfDocumentUri } from './utils';
+import { logInfo, logDebug, logError } from '../utils/logger';
+import { lastPathOfDocumentUri } from '../utils/utils';
 
 export async function evaluateTestResult(rootItem: vscode.TestItem,
     runEnvironment: RunEnvironment,
     onTestEvaluationDone: (item: vscode.TestItem) => void,
     onTestEvaluationFailed: (item: vscode.TestItem) => void) {
-    const baseName = lastPathOfDocumentUri(rootItem.uri!);
-    const jsonResultFile = `test_detail_for_${baseName}`;
-    logDebug(`Evaluating json result file ${jsonResultFile}`);
-
-    const buildFolder = cfg.getBuildFolder();
-    const jsonResultFileUri = vscode.Uri.file(path.join(buildFolder, jsonResultFile));
-    const testReportById = await rj.createTestReportById(jsonResultFileUri);
-
-    let evaluationSuccess = true;
-    runEnvironment.leafItemsByRootItem.get(rootItem!)!.forEach(item => {
-        if (!evaluateItem(item, testReportById, runEnvironment.testRun)) {
-            evaluationSuccess = false;
-        }
-    });
-    if (evaluationSuccess) {
+    const testReportById = await createTestReportById(rootItem);
+    if (hasEvaluatedWithoutErrors(rootItem, runEnvironment, testReportById)) {
         onTestEvaluationDone(rootItem);
     }
     else {
@@ -32,26 +19,39 @@ export async function evaluateTestResult(rootItem: vscode.TestItem,
     }
 }
 
-function evaluateItem(item: vscode.TestItem, testReportById: Map<string, rj.TestReport[]>, testRun: vscode.TestRun) {
-    logDebug(`Looking for test result of leaf item ${item.id} `);
-    const testReports = testReportById.get(item.id);
-    if (testReports) {
-        logDebug(`Testreport found for ${item.id}`);
-        const testCaseFailures = testReports.filter(report => {
-            return !report.hasPassed;
-        });
+function createTestReportById(rootItem: vscode.TestItem) {
+    const baseName = lastPathOfDocumentUri(rootItem.uri!);
+    const jsonResultFile = `test_detail_for_${baseName}`;
+    logDebug(`Evaluating json result file ${jsonResultFile}`);
 
-        if (testCaseFailures.length === 0) {
-            processPassedTestcase(testRun, item);
+    const buildFolder = cfg.getBuildFolder();
+    const jsonResultFileUri = vscode.Uri.file(path.join(buildFolder, jsonResultFile));
+    return rj.createTestReportById(jsonResultFileUri);
+}
+
+function hasEvaluatedWithoutErrors(rootItem: vscode.TestItem, runEnvironment: RunEnvironment, testReportById: Map<string, rj.TestReport[]>) {
+    return runEnvironment.leafItemsByRootItem.get(rootItem!)!.reduce((testState, currentItem) => {
+        const testReportsForItem = testReportById.get(currentItem.id);
+        if (!testReportsForItem) {
+            logError(`Testreport for ${currentItem.id} not found in test file!`);
+            return false;
         }
-        else {
-            processFailedTestcase(testRun, item, testCaseFailures[0].failures[0]);
-        }
-        return true;
+        evaluteItem(currentItem, testReportsForItem, runEnvironment.testRun);
+        return testState;
+    }, true);
+}
+
+function evaluteItem(item: vscode.TestItem, testReportsForItem: rj.TestReport[], testRun: vscode.TestRun) {
+    logDebug(`Looking for test result of leaf item ${item.id} `);
+    const testCaseFailures = testReportsForItem.filter(report => {
+        return !report.hasPassed;
+    });
+
+    if (testCaseFailures.length === 0) {
+        processPassedTestcase(testRun, item);
     }
     else {
-        logError(`Testcase item for id ${item.id} not found!`);
-        return false;
+        processFailedTestcase(testRun, item, testCaseFailures[0].failures[0]);
     }
 }
 

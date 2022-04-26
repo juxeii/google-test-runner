@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { logDebug, logError } from './logger';
-import { TestCase } from './types';
+import { logDebug, logError } from '../utils/logger';
+import { TestCase } from '../types';
 
 export function updateTestControllerFromDocument(document: vscode.TextDocument, testController: vscode.TestController, testCases: TestCase[]) {
     const rootItemId = path.parse(document.uri.path).base;

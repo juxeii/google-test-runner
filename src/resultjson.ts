@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { logDebug } from './logger';
+import { logDebug } from './utils/logger';
 
 export type TestFailure =
     {
@@ -42,49 +42,57 @@ function createTestReports(parsedJSON: any) {
     let testReportById = new Map<string, TestReport[]>();
     mapJSONArray(parsedJSON.testsuites, testSuiteJSON => {
         logDebug(`Processing testSuiteJSON ${testSuiteJSON.name}`);
-
-        mapJSONArray(testSuiteJSON.testsuite, testCaseJSON => {
-            let parameter = undefined;
-            if (testCaseJSON.value_param) {
-                parameter = testCaseJSON.value_param;
-            }
-            else if (testCaseJSON.type_param) {
-                parameter = testCaseJSON.type_param;
-            }
-
-            let failures: TestFailure[] = [];
-            if (testCaseJSON.failures) {
-                failures = fillFailures(testCaseJSON.failures, parameter);
-            }
-
-            const testReport: TestReport =
-            {
-                name: testCaseJSON.name,
-                fixture: testCaseJSON.fixture,
-                id: testCaseId(testCaseJSON),
-                parameter: parameter,
-                line: testCaseJSON.line,
-                timestamp: testCaseJSON.timestamp,
-                file: testCaseJSON.file,
-                hasPassed: failures.length === 0,
-                failures: failures
-            }
-            logDebug(`Processing testCaseJSON ${testCaseJSON.name} with id ${testReport.id}`);
-
-            let currentTestReports = testReportById.get(testReport.id);
-            if (!currentTestReports) {
-                currentTestReports = [];
-            }
-            currentTestReports.push(testReport);
-            testReportById.set(testReport.id, currentTestReports);
-
-        });
+        mapJSONArray(testSuiteJSON.testsuite, testCaseJSON => processTestCaseJSON(testCaseJSON, testReportById));
     });
     return testReportById;
 }
 
+function processTestCaseJSON(testCaseJSON: any, testReportById: Map<string, TestReport[]>) {
+    const testReport = createTestReport(testCaseJSON);
+    let currentTestReports = testReportById.get(testReport.id);
+    if (!currentTestReports) {
+        currentTestReports = [];
+    }
+    currentTestReports.push(testReport);
+    testReportById.set(testReport.id, currentTestReports);
+}
+
+function createTestReport(testCaseJSON: any) {
+    const parameter = parameterOfTestCaseJSON(testCaseJSON);
+    const failures = failuresOfTestCaseJSON(testCaseJSON, parameter);
+    const testReport: TestReport =
+    {
+        name: testCaseJSON.name,
+        fixture: testCaseJSON.fixture,
+        id: testCaseId(testCaseJSON),
+        parameter: parameter,
+        line: testCaseJSON.line,
+        timestamp: testCaseJSON.timestamp,
+        file: testCaseJSON.file,
+        hasPassed: failures.length === 0,
+        failures: failuresOfTestCaseJSON(testCaseJSON, parameter)
+    }
+    return testReport;
+}
+
+function parameterOfTestCaseJSON(testCaseJSON: any) {
+    if (testCaseJSON.value_param) {
+        return testCaseJSON.value_param;
+    }
+    else if (testCaseJSON.type_param) {
+        return testCaseJSON.type_param;
+    }
+    return undefined;
+}
+
+function failuresOfTestCaseJSON(testCaseJSON: any, parameter: any) {
+    if (testCaseJSON.failures) {
+        return fillFailures(testCaseJSON.failures, parameter);
+    }
+    return [];
+}
+
 function fillFailures(failuresJSON: Array<any>, paramName: string): TestFailure[] {
-    logDebug(`fillFailures len ${fillFailures.length}`);
     return mapJSONArray(failuresJSON, failureJSON => {
         const testFailure: TestFailure =
         {
@@ -92,9 +100,6 @@ function fillFailures(failuresJSON: Array<any>, paramName: string): TestFailure[
             lineNo: lineNumberFromFailureMessage(failureJSON.failure),
             param: paramName
         }
-        logDebug(`TestFailure structure \
-message ${failureJSON.message} \
-lineNo ${failureJSON.lineNo}`);
         return testFailure;
     });
 }

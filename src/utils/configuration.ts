@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { buildNinjaFile } from './extension';
+import { buildNinjaFile } from '../extension';
 
 export const extensionName = 'GoogleTestRunner';
 

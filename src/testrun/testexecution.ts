@@ -1,14 +1,11 @@
 import * as vscode from 'vscode';
-import * as cfg from './configuration';
-import { ProcessHandler, startProcess } from './system';
-import { logInfo, logDebug, logError } from './logger';
-import { buildTests } from './testbuild';
-import { evaluateTestResult } from './testevaluation';
-import { RunTask } from './system';
+import * as cfg from '../utils/configuration';
+import { ProcessHandler, startProcess } from '../utils/system';
+import { logDebug } from '../utils/logger';
 import { RunEnvironment } from './testrun';
-import { getTargetFileForDocument, lastPathOfDocumentUri } from './utils';
+import { getTargetFileForDocument, lastPathOfDocumentUri } from '../utils/utils';
 
-export function runTests(runEnvironment: RunEnvironment, onTestFileExecuted: (item: vscode.TestItem) => void, onTestFileFailed: (item: vscode.TestItem) => void) {
+export function runTests(runEnvironment: RunEnvironment, onTestFileExecuted: (item: vscode.TestItem) => void) {
     runEnvironment.leafItemsByRootItem.forEach((leafItems, rootItem) => {
         const rootItemUri = rootItem.uri!;
         const targetFile = getTargetFileForDocument(rootItemUri);
@@ -20,7 +17,10 @@ export function runTests(runEnvironment: RunEnvironment, onTestFileExecuted: (it
         let handlers: ProcessHandler = {
             onDone: (code) => onTestFileExecuted(rootItem),
             onData: logDebug,
-            onError: (code) => onTestFileFailed(rootItem)
+            onError: (code) => {
+                logDebug(`Execution failed with ${code}`);
+                onTestFileExecuted(rootItem);
+            }
         }
         const executionTask = startProcess(cmd, handlers);
         runEnvironment.runTasks.push(executionTask);
