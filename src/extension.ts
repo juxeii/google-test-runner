@@ -175,7 +175,7 @@ function createBuildNinjaListener(context: vscode.ExtensionContext, testControll
 }
 
 async function loadTargetMappings() {
-    createTargetMappingFile();
+    await createTargetMappingFile();
     const buildFolder = cfg.getBuildFolder()
     const targetMappingUri = vscode.Uri.file(path.join(buildFolder, targetMappingFileName));
     const rawContents = await vscode.workspace.fs.readFile(targetMappingUri);

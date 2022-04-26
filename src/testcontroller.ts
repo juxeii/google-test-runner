@@ -3,7 +3,6 @@ import * as path from 'path';
 import { logDebug, logError } from './logger';
 import { TestCase } from './types';
 
-
 export function updateTestControllerFromDocument(document: vscode.TextDocument, testController: vscode.TestController, testCases: TestCase[]) {
     const rootItemId = path.parse(document.uri.path).base;
     const rootItem = addFixtureItem(testController, rootItemId, testController.items, document);
@@ -66,4 +65,61 @@ function addTestCaseToFixture(testCase: TestCase, testCasesByFixture: Map<string
     else {
         logError(`testCase.fixture did not match regex for ${testCase.fixture}`);
     }
+}
+
+export function createLeafItemsByRoot(testController: vscode.TestController, request: vscode.TestRunRequest): Map<vscode.TestItem, vscode.TestItem[]> {
+    let roots = rootItems(testController, request);
+    let leafItemsByRootItem = new Map<vscode.TestItem, vscode.TestItem[]>();
+    roots.forEach(item => leafItemsByRootItem.set(item, []));
+    assignLeafItems(testController, request, leafItemsByRootItem);
+    leafItemsByRootItem.forEach((leafs, root) => {
+
+        logDebug(`Root item ${root.id} has leafs`);
+        leafs.forEach(leaf => {
+
+            logDebug(`leaf item ${leaf.label}`);
+        });
+    });
+
+    return leafItemsByRootItem;
+}
+
+function rootItems(testController: vscode.TestController, request: vscode.TestRunRequest) {
+    let roots = new Set<vscode.TestItem>();
+    if (request.include) {
+        request.include.forEach(item => roots.add(getRoot(item)));
+    }
+    else {
+        testController.items.forEach(item => roots.add(item));
+    }
+    roots.forEach(item => logDebug(`Root item is ${item.id}`));
+    return roots;
+}
+
+function assignLeafItems(testController: vscode.TestController, request: vscode.TestRunRequest, leafItemsByRootItem: Map<vscode.TestItem, vscode.TestItem[]>) {
+    if (request.include) {
+        request.include.forEach(item => assignItemToMap(item, leafItemsByRootItem));
+    }
+    else {
+        testController.items.forEach(item => assignItemToMap(item, leafItemsByRootItem));
+    }
+}
+
+export function assignItemToMap(item: vscode.TestItem, leafItemsByRootItem: Map<vscode.TestItem, vscode.TestItem[]>) {
+    if (item.children.size === 0) {
+        const rootItem = getRoot(item);
+        let leafs = leafItemsByRootItem.get(rootItem)!;
+        leafs.push(item);
+        leafItemsByRootItem.set(rootItem, leafs);
+    }
+    else {
+        item.children.forEach(item => assignItemToMap(item, leafItemsByRootItem))
+    }
+}
+
+function getRoot(item: vscode.TestItem): vscode.TestItem {
+    if (!item.parent) {
+        return item;
+    }
+    return getRoot(item.parent);
 }

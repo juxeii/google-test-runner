@@ -1,23 +1,25 @@
 
 import * as cfg from './configuration';
-import { spawnShell } from './system';
+import { ProcessHandler, startProcess } from './system';
 import { logInfo, logDebug } from './logger';
+import { RunEnvironment } from './testrun';
+import { getTargetForDocument } from './utils';
+import { targetMappingFileContents } from './extension';
 
-export async function buildTests(targets: Array<string>, onBuildDone: () => void, onBuildFailed: () => void) {
-    const targetsParameter = targets.join(" ");
-    logInfo(`Building required test executables for target(s) ${targetsParameter}.`);
+export function buildTests(runEnvironment: RunEnvironment, handlers: ProcessHandler) {
+    const targets = getTargets(runEnvironment).join(" ");
+    logInfo(`Building required test executables for target(s) ${targets}.`);
 
     const buildFolder = cfg.getBuildFolder();
-    const cmd = `cd ${buildFolder} && ninja ${targetsParameter}`;
-    spawnShell(cmd, (code) => processExitCode(code, onBuildDone, onBuildFailed), logDebug);
+    const cmd = `cd ${buildFolder} && ninja ${targets}`;
+    return startProcess(cmd, handlers);
 }
 
-function processExitCode(code: number, onBuildDone: () => void, onBuildFailed: () => void) {
-    logDebug(`Build exited with code ${code}`);
-    if (code === 1) {
-        onBuildFailed();
-    }
-    else {
-        onBuildDone();
-    }
+function getTargets(runEnvironment: RunEnvironment) {
+    return [...runEnvironment.leafItemsByRootItem.keys()].map(item => {
+        const uri = item.uri!;
+        const targetName = getTargetForDocument(targetMappingFileContents, uri);
+        logDebug(`Found build target ${targetName} for ${uri}`);
+        return targetName;
+    });
 }
