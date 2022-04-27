@@ -26,15 +26,12 @@ export function lastPathOfDocumentUri(uri: vscode.Uri) {
 
 export async function loadTargetMappings(targetMappingFileName: string) {
     await createTargetMappingFile(targetMappingFileName);
-    const buildFolder = cfg.getBuildFolder()
-    const targetMappingUri = vscode.Uri.file(path.join(buildFolder, targetMappingFileName));
+    const targetMappingUri = createBuildFolderUriForFilName(targetMappingFileName);
     const rawContents = await vscode.workspace.fs.readFile(targetMappingUri);
     const unfilteredText = rawContents.toString()
-
     const lineFilterRegExp = /(CXX_COMPILER__|CXX_EXECUTABLE_LINKER__)/;
     const targetMappingFileContents = unfilteredText.split('\n').filter(line => line.match(lineFilterRegExp)).join('\n');
 
-    logDebug(`unfilteredText size ${unfilteredText.length} targetMappingFileContents size ${targetMappingFileContents.length}`);
     return targetMappingFileContents;
 }
 
@@ -42,4 +39,22 @@ async function createTargetMappingFile(targetMappingFileName: string) {
     const buildFolder = cfg.getBuildFolder();
     await execShell(`cd ${buildFolder} && ninja -t targets all > ${targetMappingFileName}`);
     logDebug(`Created target mappings file ${targetMappingFileName}`);
+}
+
+export function getGTestLogFile(uri: vscode.Uri) {
+    const baseName = 'gtestLog_' + lastPathOfDocumentUri(uri!);
+    const gTestLogFile = createBuildFolderUriForFilName(baseName);
+    return { uri: gTestLogFile, baseName: baseName };
+}
+
+
+export function getJSONResultFile(uri: vscode.Uri) {
+    const baseName = 'test_detail_for_' + lastPathOfDocumentUri(uri!);
+    const jsonResultFile = createBuildFolderUriForFilName(baseName);
+    return { uri: jsonResultFile, baseName: baseName };
+}
+
+export function createBuildFolderUriForFilName(fileName: string) {
+    const buildFolder = cfg.getBuildFolder();
+    return vscode.Uri.file(path.join(buildFolder, fileName));
 }

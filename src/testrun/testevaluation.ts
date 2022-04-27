@@ -4,7 +4,7 @@ import * as rj from '../resultjson';
 import * as cfg from '../utils/configuration';
 import { RunEnvironment } from './testrun';
 import { logInfo, logDebug, logError } from '../utils/logger';
-import { lastPathOfDocumentUri } from '../utils/utils';
+import { getJSONResultFile, lastPathOfDocumentUri } from '../utils/utils';
 
 export async function evaluateTestResult(rootItem: vscode.TestItem,
     runEnvironment: RunEnvironment,
@@ -20,13 +20,9 @@ export async function evaluateTestResult(rootItem: vscode.TestItem,
 }
 
 function createTestReportById(rootItem: vscode.TestItem) {
-    const baseName = lastPathOfDocumentUri(rootItem.uri!);
-    const jsonResultFile = `test_detail_for_${baseName}`;
-    logDebug(`Evaluating json result file ${jsonResultFile}`);
-
-    const buildFolder = cfg.getBuildFolder();
-    const jsonResultFileUri = vscode.Uri.file(path.join(buildFolder, jsonResultFile));
-    return rj.createTestReportById(jsonResultFileUri);
+    const jsonResultFile = getJSONResultFile(rootItem.uri!);
+    logDebug(`Evaluating json result file ${jsonResultFile.baseName}`);
+    return rj.createTestReportById(jsonResultFile.uri);
 }
 
 function hasEvaluatedWithoutErrors(rootItem: vscode.TestItem, runEnvironment: RunEnvironment, testReportById: Map<string, rj.TestReport[]>) {

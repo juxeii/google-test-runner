@@ -118,12 +118,10 @@ function testCaseId(testcase: any) {
     const fixtureName: string = testcase.classname;
 
     if (testcase.type_param) {
-        //Typed test
         const fixtureNameWildCard = fixtureName.match(/\w+\/(\w+\/)?/)![0];
         return fixtureNameWildCard + "*." + testCaseName;
     }
     if (testcase.value_param) {
-        //Typed test#
         const fixtureNameWildCard = fixtureName.match(/\w+\/\w+/);
         const testCaseNameWildCard = testCaseName.match(/\w+\//);
         return fixtureNameWildCard + "." + testCaseNameWildCard + '*';

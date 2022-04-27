@@ -3,7 +3,7 @@ import * as cfg from '../utils/configuration';
 import { ProcessHandler, startProcess } from '../utils/system';
 import { logDebug } from '../utils/logger';
 import { RunEnvironment } from './testrun';
-import { getTargetFileForDocument, lastPathOfDocumentUri } from '../utils/utils';
+import { getGTestLogFile, getJSONResultFile, getTargetFileForDocument, lastPathOfDocumentUri } from '../utils/utils';
 
 export function runTests(runEnvironment: RunEnvironment, onTestFileExecuted: (item: vscode.TestItem) => void) {
     runEnvironment.leafItemsByRootItem.forEach((leafItems, rootItem) => {
@@ -11,8 +11,10 @@ export function runTests(runEnvironment: RunEnvironment, onTestFileExecuted: (it
         const targetFile = getTargetFileForDocument(rootItemUri);
         const filter = createRunFilter(leafItems);
         const baseName = lastPathOfDocumentUri(rootItemUri);
-        const jsonResultFile = `test_detail_for_${baseName}`;
-        const cmd = `cd ${cfg.getBuildFolder()} && ${targetFile} --gtest_filter=${filter} --gtest_output=json:${jsonResultFile}`;
+        const jsonResultFile = getJSONResultFile(rootItem.uri!).baseName;
+        const verbosityLevel = cfg.gtestVerbosityLevel();
+        const gtestLogFile = getGTestLogFile(rootItemUri).baseName;
+        const cmd = `cd ${cfg.getBuildFolder()} && ${targetFile} --gtest_filter=${filter} --gtest_output=json:${jsonResultFile} --verbose ${verbosityLevel} | tee ${gtestLogFile}`;
 
         let handlers: ProcessHandler = {
             onDone: (code) => onTestFileExecuted(rootItem),

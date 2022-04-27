@@ -6,6 +6,7 @@ import { evaluateTestResult } from './testevaluation';
 import { RunTask } from '../utils/system';
 import { createLeafItemsByRoot } from './testcontroller';
 import { runTests } from './testexecution';
+import { getGTestLogFile } from '../utils/utils';
 
 export type RunEnvironment = {
     testRun: vscode.TestRun;
@@ -46,7 +47,9 @@ function startBuild(runEnvironment: RunEnvironment) {
 
 
 function startRun(testController: vscode.TestController, runRequest: vscode.TestRunRequest) {
+    logInfo('***********************************************');
     logInfo('Starting test run...');
+    logInfo('***********************************************');
     const testRun = testController.createTestRun(runRequest);
     showItemSpinners(testController, runRequest, testRun);
     return testRun;
@@ -129,6 +132,8 @@ function onTestExecutionDone(rootItem: vscode.TestItem, runEnvironment: RunEnvir
 
 function onTestEvaluationDone(rootItem: vscode.TestItem, testExecutionEmitter: vscode.EventEmitter<void>) {
     logDebug(`Test evaluation for ${rootItem.uri} finished.`);
+    const gTestLogFile = getGTestLogFile(rootItem.uri!).uri;
+    logInfo(`GTest log file: ${gTestLogFile}`);
     logDebug(`Firing done event.`);
     testExecutionEmitter.fire();
 }
@@ -141,5 +146,8 @@ function onTestEvaluationFailed(rootItem: vscode.TestItem, testExecutionEmitter:
 
 function onAllRunsCompleted(run: vscode.TestRun) {
     run.end();
-    logInfo('All test runs completed.');
+    logInfo('All tests completed.');
+    logInfo('***********************************************');
+    logInfo('Test run completed.');
+    logInfo('***********************************************');
 }

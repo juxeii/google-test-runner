@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import winston = require('winston');
 import * as Transport from 'winston-transport';
 import { createLogger, format } from "winston";
+import { logLevel } from './configuration';
 const { MESSAGE } = require("triple-beam");
 
 export function logInfo(message: string) {
@@ -49,7 +50,7 @@ let loggerImpl: winston.Logger = createLogger({
     level: logLevel(),
     transports: [new OutputChannelTransport(outputChannel)],
     format: format.combine(
-        format.timestamp(),
+        format.timestamp({ format: ()=>  new Date().toLocaleString('en-US', { hour12: false })}),
         format.printf(({ timestamp, level, message }) => `[${timestamp}] ${level.toUpperCase()}: ${message}`)
     ),
 });
@@ -62,9 +63,4 @@ function customizedLogLevels() {
             'error': 0,
         }
     }.levels;
-}
-
-function logLevel() {
-    const config = vscode.workspace.getConfiguration('googletestrunner');
-    return config.get<string>('logLevel')!;
 }

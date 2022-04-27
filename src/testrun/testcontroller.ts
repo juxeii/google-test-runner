@@ -11,6 +11,13 @@ export function updateTestControllerFromDocument(document: vscode.TextDocument, 
     fixtures.forEach((fixtureTestCases, fixtureId) => processFixture(fixtureTestCases, fixtureId, testController, rootItem, document));
 }
 
+function addFixtureItem(testController: vscode.TestController, fixtureId: string, parent: vscode.TestItemCollection, document: vscode.TextDocument) {
+    const fixtureItem = testController.createTestItem(fixtureId, fixtureId, document.uri);
+    parent.add(fixtureItem);
+    logDebug(`Added fixture item ${fixtureItem.id}`);
+    return fixtureItem;
+}
+
 function processFixture(fixtureTestCases: TestCase[],
     fixtureId: string,
     testController: vscode.TestController,
@@ -31,18 +38,11 @@ function lineNoToRange(lineNo: number) {
 }
 
 function addTestCaseItem(testController: vscode.TestController, testCase: TestCase, document: vscode.TextDocument, parent: vscode.TestItem) {
-    const testCaseItem = testController.createTestItem(testCase.id, testCase.id, document.uri);
+    const testCaseItem = testController.createTestItem(testCase.id, testCase.name, document.uri);
     testCaseItem.range = lineNoToRange(testCase.lineNo - 1);
     parent.children.add(testCaseItem);
     logDebug(`Added testCaseItem ${testCaseItem.id} to parent ${parent.id}`);
     return testCaseItem;
-}
-
-function addFixtureItem(testController: vscode.TestController, fixtureId: string, parent: vscode.TestItemCollection, document: vscode.TextDocument) {
-    const fixtureItem = testController.createTestItem(fixtureId, fixtureId, document.uri);
-    parent.add(fixtureItem);
-    logDebug(`Added fixture item ${fixtureItem.id}`);
-    return fixtureItem;
 }
 
 function detectFixtures(testCases: TestCase[]) {
@@ -63,7 +63,7 @@ function addTestCaseToFixture(testCase: TestCase, testCasesByFixture: Map<string
         testCasesByFixture.set(fixtureName, currentTestCases);
     }
     else {
-        logError(`testCase.fixture did not match regex for ${testCase.fixture}`);
+        logError(`testCase.fixture did not match regex for ${testCase.fixture}!`);
     }
 }
 
@@ -72,15 +72,6 @@ export function createLeafItemsByRoot(testController: vscode.TestController, req
     let leafItemsByRootItem = new Map<vscode.TestItem, vscode.TestItem[]>();
     roots.forEach(item => leafItemsByRootItem.set(item, []));
     assignLeafItems(testController, request, leafItemsByRootItem);
-    leafItemsByRootItem.forEach((leafs, root) => {
-
-        logDebug(`Root item ${root.id} has leafs`);
-        leafs.forEach(leaf => {
-
-            logDebug(`leaf item ${leaf.label}`);
-        });
-    });
-
     return leafItemsByRootItem;
 }
 
