@@ -11,9 +11,15 @@
         "Other"
     ],
     "repository": {
+<<<<<<< HEAD
 		"type": "git",
 		"url": "https://gitlabe1.ext.net.nokia.com/reiss/googletestrunner"
 	},
+=======
+        "type": "git",
+        "url": "https://gitlabe1.ext.net.nokia.com/reiss/googletestrunner"
+    },
+>>>>>>> b6dda668b52c2e47be9f826c8bc5a31a8d50b879
     "activationEvents": [
         "workspaceContains:**/CMakeLists.txt"
     ],
@@ -80,6 +86,11 @@
         "node-sass": "^7.0.1",
         "tree-kill": "^1.2.2",
         "triple-beam": "^1.3.0",
+<<<<<<< HEAD
+=======
+        "update": "^0.7.4",
+        "upgrade": "^1.1.0",
+>>>>>>> b6dda668b52c2e47be9f826c8bc5a31a8d50b879
         "winston": "^3.7.2",
         "winston-transport": "^4.5.0"
     }
