@@ -1,17 +1,17 @@
 
 import * as cfg from '../utils/configuration';
-import { ProcessHandler, startProcess } from '../utils/system';
+import { startProcess } from '../utils/system';
 import { logInfo, logDebug } from '../utils/logger';
 import { RunEnvironment } from './testrun';
 import { targetFileByUri } from '../extension';
 
-export function buildTests(runEnvironment: RunEnvironment, handlers: ProcessHandler) {
+export function buildTests(runEnvironment: RunEnvironment) {
     const targets = getTargets(runEnvironment).join(" ");
     logInfo(`Building required test executables for target(s) ${targets}.`);
 
     const buildFolder = cfg.getBuildFolder();
     const cmd = `cd ${buildFolder} && ninja ${targets}`;
-    return startProcess(cmd, handlers);
+    return startProcess(cmd);
 }
 
 function getTargets(runEnvironment: RunEnvironment) {

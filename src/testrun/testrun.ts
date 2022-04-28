@@ -1,19 +1,17 @@
 import * as vscode from 'vscode';
-import { ProcessHandler } from '../utils/system';
 import { logInfo, logDebug } from '../utils/logger';
 import { buildTests } from './testbuild';
 import { evaluateTestResult } from './testevaluation';
-import { RunTask } from '../utils/system';
 import { createLeafItemsByRoot } from './testcontroller';
-import { runTests } from './testexecution';
+import { runTest } from './testexecution';
 import { getGTestLogFile } from '../utils/utils';
+import { Observable } from 'observable-fns';
 
 export type RunEnvironment = {
     testRun: vscode.TestRun;
     testController: vscode.TestController;
     runRequest: vscode.TestRunRequest;
     leafItemsByRootItem: Map<vscode.TestItem, vscode.TestItem[]>
-    runTasks: RunTask[];
     testExecutionEmitter: vscode.EventEmitter<void>;
 }
 
@@ -30,21 +28,13 @@ function createRunHandler(testController: vscode.TestController) {
     ) {
         const testRun = startRun(testController, runRequest);
         const runEnvironment = initializeRunEnvironment(testController, runRequest, testRun, token);
-        startBuild(runEnvironment);
+        buildTests(runEnvironment).subscribe({
+            next(data: string) { logDebug(`${data}`) },
+            error(err) { onBuildFailed(runEnvironment) },
+            complete() { onBuildDone(runEnvironment) }
+        });
     }
 }
-
-function startBuild(runEnvironment: RunEnvironment) {
-    const buildHandlers: ProcessHandler = {
-        onDone: () => onBuildDone(runEnvironment),
-        onData: logDebug,
-        onError: () => onBuildFailed(runEnvironment),
-        onAbort: (err) => logDebug(`Test build aborted!`)
-    }
-    const buildTask = buildTests(runEnvironment, buildHandlers);
-    runEnvironment.runTasks.push(buildTask);
-}
-
 
 function startRun(testController: vscode.TestController, runRequest: vscode.TestRunRequest) {
     logInfo('***********************************************');
@@ -92,13 +82,12 @@ function initializeRunEnvironment(testController: vscode.TestController,
         testController: testController,
         runRequest: runRequest,
         leafItemsByRootItem: leafItemsByRootItem,
-        runTasks: [],
         testExecutionEmitter: testExecutionEmitter
     }
 
     const cancelListener = token.onCancellationRequested(() => {
         logDebug(`Requested cancel on test run.`);
-        runEnvironment.runTasks.forEach(runTask => runTask.stop());
+        //runEnvironment.runTasks.forEach(runTask => runTask.stop());
         skipItemsOnCancel(runEnvironment);
         testRun.end();
         cancelListener.dispose();
@@ -114,10 +103,22 @@ function onBuildFailed(runEnvironment: RunEnvironment) {
 
 function onBuildDone(runEnvironment: RunEnvironment) {
     logInfo('Test executables successfully build.');
-
     logDebug('Running test executables now...');
-    runTests(runEnvironment,
-        rootItem => onTestExecutionDone(rootItem, runEnvironment));
+    [...runEnvironment.leafItemsByRootItem].map(([rootItem, leafItems]) => {
+        const testRun = runTest({ rootItem, leafItems });
+        subscribeToTestRun(testRun, rootItem, runEnvironment);
+    });
+}
+
+function subscribeToTestRun(testRun: Observable<unknown>, rootItem: vscode.TestItem, runEnvironment: RunEnvironment) {
+    testRun.subscribe({
+        next(data: string) { logDebug(data); },
+        error(code: number) {
+            logDebug(`Execution failed with ${code}`);
+            onTestExecutionDone(rootItem, runEnvironment)
+        },
+        complete() { onTestExecutionDone(rootItem, runEnvironment) }
+    });
 }
 
 function onTestExecutionDone(rootItem: vscode.TestItem, runEnvironment: RunEnvironment) {

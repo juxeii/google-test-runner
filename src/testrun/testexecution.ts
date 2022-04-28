@@ -1,32 +1,21 @@
 import * as vscode from 'vscode';
 import * as cfg from '../utils/configuration';
-import { ProcessHandler, startProcess } from '../utils/system';
+import { startProcess } from '../utils/system';
 import { logDebug } from '../utils/logger';
 import { RunEnvironment } from './testrun';
 import { targetFileByUri } from '../extension';
 import { getGTestLogFile, getJSONResultFile } from '../utils/utils';
 
-export function runTests(runEnvironment: RunEnvironment, onTestFileExecuted: (item: vscode.TestItem) => void) {
-    runEnvironment.leafItemsByRootItem.forEach((leafItems, rootItem) => {
-        const rootItemUri = rootItem.uri!;
-        const targetFile = targetFileByUri.get(rootItemUri.fsPath)?.targetFile;
-        const filter = createRunFilter(leafItems);
-        const jsonResultFile = getJSONResultFile(rootItem.uri!).baseName;
-        const verbosityLevel = cfg.gtestVerbosityLevel();
-        const gtestLogFile = getGTestLogFile(rootItemUri).baseName;
-        const cmd = `cd ${cfg.getBuildFolder()} && ${targetFile} --gtest_filter=${filter} --gtest_output=json:${jsonResultFile} --verbose ${verbosityLevel} | tee ${gtestLogFile}`;
+export function runTest(runParams: { rootItem: vscode.TestItem, leafItems: vscode.TestItem[] }) {
+    const rootItemUri = runParams.rootItem.uri!;
+    const targetFile = targetFileByUri.get(rootItemUri.fsPath)?.targetFile;
+    const filter = createRunFilter(runParams.leafItems);
+    const jsonResultFile = getJSONResultFile(runParams.rootItem.uri!).baseName;
+    const verbosityLevel = cfg.gtestVerbosityLevel();
+    const gtestLogFile = getGTestLogFile(rootItemUri).baseName;
+    const cmd = `cd ${cfg.getBuildFolder()} && ${targetFile} --gtest_filter=${filter} --gtest_output=json:${jsonResultFile} --verbose ${verbosityLevel} | tee ${gtestLogFile}`;
 
-        let handlers: ProcessHandler = {
-            onDone: (code) => onTestFileExecuted(rootItem),
-            onData: logDebug,
-            onError: (code) => {
-                logDebug(`Execution failed with ${code}`);
-                onTestFileExecuted(rootItem);
-            }
-        }
-        const executionTask = startProcess(cmd, handlers);
-        runEnvironment.runTasks.push(executionTask);
-    });
+    return startProcess(cmd);
 }
 
 function createRunFilter(items: vscode.TestItem[]) {
@@ -37,6 +26,7 @@ function createRunFilter(items: vscode.TestItem[]) {
             logDebug(`No filter for ${item.id} needed`);
             return;
         }
+
         if (item.children.size > 1 && item.parent) {
             const fixtureFilter = item.id + '*:';
             filter += fixtureFilter;

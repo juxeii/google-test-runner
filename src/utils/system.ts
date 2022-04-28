@@ -1,85 +1,46 @@
 import * as cp from "child_process";
 import * as kill from 'tree-kill'
 import { logDebug } from './logger';
+import { Observable, multicast, SubscriptionObserver } from "observable-fns"
 
-
-export interface ProcessHandler {
-    onDone?: (code: number) => void;
-    onData?: (data: string) => void;
-    onError?: (code: number) => void;
-    onAbort?: (error?: string) => void;
-}
-export interface RunTask {
-    stop: () => void;
+export function startProcess(cmd: string) {
+    return multicast(new Observable(observer => createSubscriber(cmd, observer)));
 }
 
-export function startProcess(cmd: string, processHandler?: ProcessHandler) {
+function createSubscriber(cmd: string, observer: SubscriptionObserver<any>) {
     logDebug(`Executing shell command: ${cmd}`);
-    let childProcess = cp.spawn(cmd, { shell: true, detached: true });
-    configureHandlers(childProcess, processHandler);
-
-    return { stop: () => onTaskStop(childProcess, processHandler) };
+    const childProcess = cp.spawn(cmd, { shell: true });
+    let hasExited = { value: false };
+    configureHandlers(childProcess, observer, hasExited);
+    return () => onUnsubscribe(childProcess, hasExited)
 }
 
-function onTaskStop(childProcess: cp.ChildProcessWithoutNullStreams, processHandler?: ProcessHandler) {
+function onUnsubscribe(childProcess: cp.ChildProcessWithoutNullStreams, hasExited: { value: boolean }) {
+    if (hasExited) {
+        return
+    }
     if (!childProcess.killed) {
-
-        const abortHandler = createAbortHandler(processHandler);
-        kill(childProcess.pid, 'SIGINT', abortHandler);
+        kill(childProcess.pid, 'SIGINT');
         logDebug(`Killed process id ${childProcess.pid}`);
     }
 }
 
-function configureHandlers(childProcess: cp.ChildProcessWithoutNullStreams, processHandler?: ProcessHandler) {
-    childOnData(childProcess, processHandler);
-    childOnStdError(childProcess, processHandler);
-    childOnClose(childProcess, processHandler);
-}
-
-function childOnData(childProcess: cp.ChildProcessWithoutNullStreams, processHandler?: ProcessHandler) {
-    childProcess.stdout.on('data', data => {
-        if (processHandler && processHandler.onData) {
-            processHandler.onData(data);
-        }
+function configureHandlers(childProcess: cp.ChildProcessWithoutNullStreams, observer: SubscriptionObserver<any>, hasExited: { value: boolean }) {
+    childProcess.stdout.on('data', data => observer.next(data));
+    childProcess.stderr.on('error', error => {
+        hasExited.value = true;
+        observer.error(1);
     });
-}
-
-function childOnStdError(childProcess: cp.ChildProcessWithoutNullStreams, processHandler?: ProcessHandler) {
-    childProcess.stderr.on('data', error => {
-        if (processHandler && processHandler.onError) {
-            processHandler.onError(error.message);
-        }
-    });
-}
-
-function childOnClose(childProcess: cp.ChildProcessWithoutNullStreams, processHandler?: ProcessHandler) {
-    childProcess.on('close', code => {
-        //logDebug(`CLOSE with code ${code}`);
+    //childProcess.on('close', code => code === 0 ? observer.complete() : observer.error(1));
+    childProcess.on('exit', code => {
         if (code === 0) {
-            if (processHandler && processHandler.onDone) {
-                processHandler.onDone(0);
-            }
+            hasExited.value = true;
+            observer.complete();
         }
         else {
-            if (processHandler && processHandler.onError) {
-                processHandler.onError(1);
-            }
+            observer.error(1);
         }
     });
-}
-
-
-function createAbortHandler(processHandler?: ProcessHandler) {
-    return (error: Error | undefined) => {
-        if (processHandler && processHandler.onAbort) {
-            if (error) {
-                processHandler.onAbort(error.message);
-            }
-            else {
-                processHandler.onAbort();
-            }
-        }
-    };
 }
 
 export function execShell(cmd: string) {
