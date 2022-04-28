@@ -5,14 +5,13 @@ import { discoverGTestMacros } from './parsing/macrodiscovery';
 import { updateTestControllerFromDocument } from './testrun/testcontroller';
 import { logDebug, logInfo } from './utils/logger';
 import { discoverTestCasesFromMacros } from './parsing/testdiscovery';
-import { lastPathOfDocumentUri, loadTargetMappings } from './utils/utils';
+import { createTargetByFileMapping, lastPathOfDocumentUri, TargetByInfo } from './utils/utils';
 
 export const buildNinjaFile = "build.ninja";
-export let targetMappingFileContents = '';
+export let targetFileByUri: Map<string, TargetByInfo>;
 let buildNinjaListener: vscode.FileSystemWatcher;
 let parsedFiles = new Set<vscode.Uri>();
 let noTestFiles = new Set<vscode.Uri>();
-const targetMappingFileName = "targets.out";
 
 export function activate(context: vscode.ExtensionContext) {
     logInfo(`${cfg.extensionName} activated.`);
@@ -168,7 +167,7 @@ function createBuildNinjaListener(context: vscode.ExtensionContext, testControll
 }
 
 async function getTargetMappings() {
-    targetMappingFileContents = await loadTargetMappings(targetMappingFileName);
+    targetFileByUri = await createTargetByFileMapping();
 }
 
 export function deactivate() {

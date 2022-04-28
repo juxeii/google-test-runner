@@ -3,8 +3,7 @@ import * as cfg from '../utils/configuration';
 import { ProcessHandler, startProcess } from '../utils/system';
 import { logInfo, logDebug } from '../utils/logger';
 import { RunEnvironment } from './testrun';
-import { getTargetForDocument } from '../utils/utils';
-import { targetMappingFileContents } from '../extension';
+import { targetFileByUri } from '../extension';
 
 export function buildTests(runEnvironment: RunEnvironment, handlers: ProcessHandler) {
     const targets = getTargets(runEnvironment).join(" ");
@@ -18,8 +17,8 @@ export function buildTests(runEnvironment: RunEnvironment, handlers: ProcessHand
 function getTargets(runEnvironment: RunEnvironment) {
     return [...runEnvironment.leafItemsByRootItem.keys()].map(item => {
         const uri = item.uri!;
-        const targetName = getTargetForDocument(targetMappingFileContents, uri);
+        const targetName = targetFileByUri.get(uri.fsPath)?.name;
         logDebug(`Found build target ${targetName} for ${uri}`);
         return targetName;
-    });
+    }).filter((v, i, a) => a.indexOf(v) === i);
 }

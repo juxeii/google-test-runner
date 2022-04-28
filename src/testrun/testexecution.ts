@@ -3,14 +3,14 @@ import * as cfg from '../utils/configuration';
 import { ProcessHandler, startProcess } from '../utils/system';
 import { logDebug } from '../utils/logger';
 import { RunEnvironment } from './testrun';
-import { getGTestLogFile, getJSONResultFile, getTargetFileForDocument, lastPathOfDocumentUri } from '../utils/utils';
+import { targetFileByUri } from '../extension';
+import { getGTestLogFile, getJSONResultFile } from '../utils/utils';
 
 export function runTests(runEnvironment: RunEnvironment, onTestFileExecuted: (item: vscode.TestItem) => void) {
     runEnvironment.leafItemsByRootItem.forEach((leafItems, rootItem) => {
         const rootItemUri = rootItem.uri!;
-        const targetFile = getTargetFileForDocument(rootItemUri);
+        const targetFile = targetFileByUri.get(rootItemUri.fsPath)?.targetFile;
         const filter = createRunFilter(leafItems);
-        const baseName = lastPathOfDocumentUri(rootItemUri);
         const jsonResultFile = getJSONResultFile(rootItem.uri!).baseName;
         const verbosityLevel = cfg.gtestVerbosityLevel();
         const gtestLogFile = getGTestLogFile(rootItemUri).baseName;
@@ -59,13 +59,3 @@ function createRunFilter(items: vscode.TestItem[]) {
     });
     return filter;
 }
-
-// function onTestTargetRunFailed(code: number, targetFile: string, runsCompletedEmitter: vscode.EventEmitter<void>) {
-//     logError(`Test run for target file ${targetFile} failed with code ${code}`);
-//     runsCompletedEmitter.fire();
-// }
-
-// function onAllRunsCompleted(run: vscode.TestRun) {
-//     run.end();
-//     logInfo('All test runs completed.');
-// }

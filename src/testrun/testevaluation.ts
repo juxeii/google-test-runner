@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as rj from '../resultjson';
-import * as cfg from '../utils/configuration';
 import { RunEnvironment } from './testrun';
 import { logInfo, logDebug, logError } from '../utils/logger';
 import { getJSONResultFile, lastPathOfDocumentUri } from '../utils/utils';
