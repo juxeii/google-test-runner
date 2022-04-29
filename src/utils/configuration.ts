@@ -4,20 +4,20 @@ import * as path from 'path';
 import { buildNinjaFile } from '../extension';
 
 export const extensionName = 'GoogleTestRunner';
+const configurationId = 'googleTestRunner';
 
 export function getBuildFolder() {
-    let config = vscode.workspace.getConfiguration("googletestrunner");
-    let buildFolderFromConfig = config.get<string>('buildFolder');
-    let workspaceFolder: string = vscode.workspace.workspaceFolders![0].uri.path;
-    let re = /\$\{workspaceFolder\}/;
+    const buildFolderFromConfig = getConfigurationSetting('buildFolder');
+    const workspaceFolder: string = vscode.workspace.workspaceFolders![0].uri.path;
+    const regExpFolder = /\$\{workspaceFolder\}/;
     if (buildFolderFromConfig) {
-        return buildFolderFromConfig.replace(re, workspaceFolder);
+        return buildFolderFromConfig.replace(regExpFolder, workspaceFolder);
     }
     return buildFolderFromConfig!;
 }
 
 export function hasConfigurationChanged(event: vscode.ConfigurationChangeEvent) {
-    return event.affectsConfiguration("googletestrunner.buildFolder");
+    return event.affectsConfiguration("configurationId.buildFolder");
 }
 
 export function isConfigurationValid() {
@@ -25,16 +25,22 @@ export function isConfigurationValid() {
 }
 
 export function logLevel() {
-    const config = vscode.workspace.getConfiguration('googletestrunner');
-    return config.get<string>('logLevel')!;
+    return getConfigurationSetting('logLevel')!;
 }
 
 export function gtestVerbosityLevel() {
-    const config = vscode.workspace.getConfiguration('googletestrunner');
-    return config.get<string>('gtestVerbosityLevel')!;
+    return getConfigurationSetting('gtestVerbosityLevel')!;
 }
 
 function isBuildNinjaFilePresent() {
     let buildNinjaPath = path.join(getBuildFolder(), buildNinjaFile);
     return fs.existsSync(buildNinjaPath);
+}
+
+function getConfiguration() {
+    return vscode.workspace.getConfiguration(configurationId);
+}
+
+function getConfigurationSetting(setting: string) {
+    return getConfiguration().get<string>(setting)!;
 }

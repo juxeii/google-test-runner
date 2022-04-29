@@ -19,16 +19,15 @@ export async function discoverGTestMacros(document: vscode.TextDocument) {
     const documentText = document.getText();
     let gTestMacros: GTestMacro[] = [];
 
-    let match;
-    while (match = GTESTMACRO_REGEXP.exec(documentText)) {
+    [...documentText.matchAll(GTESTMACRO_REGEXP)].forEach(match => {
         const macro = macroFromMatch(match, document);
         gTestMacros.push(macro);
-    }
+    });
     return gTestMacros;
 }
 
-function macroFromMatch(match: RegExpExecArray, document: vscode.TextDocument) {
-    const matchPosition = document.positionAt(match.index);
+function macroFromMatch(match: RegExpMatchArray, document: vscode.TextDocument) {
+    const matchPosition = document.positionAt(match.index!);
     const macro: GTestMacro = {
         type: gTestMacroTypeByMacroName.get(match[1])!,
         fixture: match[2],
