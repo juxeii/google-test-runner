@@ -3,6 +3,8 @@ import * as path from 'path';
 import * as cfg from './configuration';
 import fs = require('fs');
 import { buildNinjaFile } from '../extension';
+import { logDebug, logInfo } from './logger';
+import { resolve } from 'path';
 
 export type TargetByInfo = {
     name: string;
@@ -17,18 +19,23 @@ export async function createTargetByFileMapping() {
 }
 
 function fillMappingWithTargetInfo(fileContents: string) {
-    let relPathByTarget = createTargetFileByTargetMapping(fileContents);
-    let targetByFileMapping = new Map<string, TargetByInfo>();
-    const fileAndTargetRegExp = new RegExp(/.*CXX_COMPILER__(\w+)_.+?((?:\/(?:\w|\.|-)+)+).*/, 'g');
+    const buildFolder = cfg.getBuildFolder();
+    const relPathByTarget = createTargetFileByTargetMapping(fileContents);
+    const targetByFileMapping = new Map<string, TargetByInfo>();
+    const fileAndTargetRegExp = new RegExp(/^.*CXX_COMPILER__(\w+)_.+\s+((..)?(?:\/(?:\w|\.|-)+)+).*/, 'gm');
     let match;
     while (match = fileAndTargetRegExp.exec(fileContents)) {
-        const absPath = match[2];
+        const path = match[2];
         const target = match[1];
-        const targetFile = relPathByTarget.get(target);
-        if (targetFile) {
-            targetByFileMapping.set(absPath, { name: target, targetFile: targetFile });
+        const relTargetFile = relPathByTarget.get(target);
+        if (relTargetFile) {
+            const sourceFile = resolve(buildFolder, path)
+            const targetFile = resolve(buildFolder, relTargetFile)
+            logDebug(`sourceFile ${sourceFile} target ${target} targetFile ${targetFile}`);
+            targetByFileMapping.set(sourceFile, { name: target, targetFile: targetFile });
         }
     }
+    logInfo(`Mapped ${targetByFileMapping.size} targets from build manifest.`);
     return targetByFileMapping;
 }
 
