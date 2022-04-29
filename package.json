@@ -2,8 +2,9 @@
     "name": "googletestrunner",
     "displayName": "GoogleTestRunner",
     "description": "A test runner for the C++ google test framework.",
-    "version": "0.0.1",
-    "publisher": "juxeii",
+    "version": "0.0.2",
+    "icon": "images/gtest.png",
+    "publisher": "nokia",
     "engines": {
         "vscode": "^1.66.0"
     },
@@ -12,7 +13,7 @@
     ],
     "repository": {
         "type": "git",
-        "url": "https://github.com/juxeii/google-test-runner"
+        "url": "https://gitlabe1.ext.net.nokia.com/reiss/googletestrunner"
     },
     "activationEvents": [
         "workspaceContains:**/CMakeLists.txt"

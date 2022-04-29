@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as cfg from './configuration';
 import fs = require('fs');
 import { buildNinjaFile } from '../extension';
-import { logDebug, logInfo } from './logger';
+import { logDebug } from './logger';
 import { resolve } from 'path';
 
 export type TargetByInfo = {
@@ -13,7 +13,7 @@ export type TargetByInfo = {
 
 export async function createTargetByFileMapping() {
     const buildFolder = cfg.getBuildFolder();
-    let pathf = path.join(buildFolder, buildNinjaFile);
+    const pathf = path.join(buildFolder, buildNinjaFile);
     const rawContents = fs.readFileSync(pathf);
     return fillMappingWithTargetInfo(rawContents.toString());
 }
@@ -23,31 +23,29 @@ function fillMappingWithTargetInfo(fileContents: string) {
     const relPathByTarget = createTargetFileByTargetMapping(fileContents);
     const targetByFileMapping = new Map<string, TargetByInfo>();
     const fileAndTargetRegExp = new RegExp(/^.*CXX_COMPILER__(\w+)_.+\s+((..)?(?:\/(?:\w|\.|-)+)+).*/, 'gm');
-    let match;
-    while (match = fileAndTargetRegExp.exec(fileContents)) {
-        const path = match[2];
+
+    [...fileContents.matchAll(fileAndTargetRegExp)].forEach(match => {
         const target = match[1];
+        const path = match[2];
         const relTargetFile = relPathByTarget.get(target);
         if (relTargetFile) {
             const sourceFile = resolve(buildFolder, path)
             const targetFile = resolve(buildFolder, relTargetFile)
-            logDebug(`sourceFile ${sourceFile} target ${target} targetFile ${targetFile}`);
             targetByFileMapping.set(sourceFile, { name: target, targetFile: targetFile });
         }
-    }
-    logInfo(`Mapped ${targetByFileMapping.size} targets from build manifest.`);
+    });
+    logDebug(`Mapped ${targetByFileMapping.size} targets from build manifest.`);
     return targetByFileMapping;
 }
 
 function createTargetFileByTargetMapping(fileContents: string) {
     let targetFileByTarget = new Map<string, string>();
     const targetFileRegex = new RegExp(/build (.*):.*CXX_EXECUTABLE_LINKER__(\w+)_/, 'g');
-    let match;
-    while (match = targetFileRegex.exec(fileContents)) {
+    [...fileContents.matchAll(targetFileRegex)].forEach(match => {
         const targetFile = match[1];
         const target = match[2];
         targetFileByTarget.set(target, targetFile);
-    }
+    });
     return targetFileByTarget;
 }
 
@@ -56,15 +54,23 @@ export function lastPathOfDocumentUri(uri: vscode.Uri) {
 }
 
 export function getGTestLogFile(uri: vscode.Uri) {
-    const baseName = 'gtestLog_' + lastPathOfDocumentUri(uri!);
+    const baseName = createGTestLogFileName(uri!);
     const gTestLogFile = createBuildFolderUriForFilName(baseName);
     return { uri: gTestLogFile, baseName: baseName };
 }
 
 export function getJSONResultFile(uri: vscode.Uri) {
-    const baseName = 'test_detail_for_' + lastPathOfDocumentUri(uri!);
+    const baseName = createJSONFileName(uri!);
     const jsonResultFile = createBuildFolderUriForFilName(baseName);
     return { uri: jsonResultFile, baseName: baseName };
+}
+
+function createGTestLogFileName(uri: vscode.Uri) {
+    return 'gtestLog_' + lastPathOfDocumentUri(uri);
+}
+
+function createJSONFileName(uri: vscode.Uri) {
+    return 'test_detail_for_' + lastPathOfDocumentUri(uri);
 }
 
 export function createBuildFolderUriForFilName(fileName: string) {
