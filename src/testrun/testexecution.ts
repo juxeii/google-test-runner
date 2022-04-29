@@ -20,33 +20,21 @@ export function runTest(runParams: { rootItem: vscode.TestItem, leafItems: vscod
 }
 
 function createRunFilter(items: vscode.TestItem[]) {
-    let filter = '';
-    items.forEach(item => {
+    return items.reduce((filter, item) => {
         if (!item.parent) {
-            filter = '*';
             logDebug(`No filter for ${item.id} needed`);
-            return;
+            filter += '*';
         }
-
-        if (item.children.size > 1 && item.parent) {
+        else if (item.children.size > 1 && item.parent) {
             const fixtureFilter = item.id + '*:';
-            filter += fixtureFilter;
             logDebug(`Adding fixture filter ${fixtureFilter} for item ${item.id}.Current filter is ${filter} `);
-            return;
+            filter += fixtureFilter;
         }
-
-        if (item.parent && !item.parent.parent) {
+        else if (item.parent) {
             const testCaseFilter = item.id + ':';
-            filter += testCaseFilter;
             logDebug(`Adding testcase filter ${testCaseFilter} for item ${item.id}.Current filter is ${filter} `);
-            return;
-        }
-
-        if (item.parent && item.parent.parent) {
-            const testCaseFilter = item.id + ':';
             filter += testCaseFilter;
-            logDebug(`Adding testcase filter ${testCaseFilter} for item ${item.id}.Current filter is ${filter} `);
         }
-    });
-    return filter;
+        return filter;
+    }, '');
 }

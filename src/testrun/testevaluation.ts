@@ -5,7 +5,7 @@ import { logInfo, logDebug, logError } from '../utils/logger';
 import { getJSONResultFile } from '../utils/utils';
 import { multicast, Observable } from 'observable-fns';
 
-export function evaluateTestResult(rootItem: vscode.TestItem, runEnvironment: RunEnvironment) {
+export function observeTestResult(rootItem: vscode.TestItem, runEnvironment: RunEnvironment) {
     return multicast(new Observable<vscode.TestItem>(observer => {
         const testReportById = createTestReportById(rootItem);
         if (hasEvaluatedWithoutErrors(rootItem, runEnvironment, testReportById)) {

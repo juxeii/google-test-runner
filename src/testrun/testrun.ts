@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { logInfo, logDebug, logError } from '../utils/logger';
 import { buildTests } from './testbuild';
-import { evaluateTestResult } from './testevaluation';
+import { observeTestResult } from './testevaluation';
 import { createLeafItemsByRoot } from './testcontroller';
 import { runTest } from './testexecution';
 import { getGTestLogFile } from '../utils/utils';
@@ -28,20 +28,15 @@ function createRunHandler(testController: vscode.TestController) {
     ) {
         const testRun = startRun(testController, runRequest);
         const runEnvironment = initializeRunEnvironment(testController, runRequest, testRun);
-        const testRunSubscription = buildTests(runEnvironment).flatMap(rootItem => {
-            const filePath = rootItem.uri?.fsPath!;
-            const targetFile = targetFileByUri.get(filePath)?.targetFile;
 
-            logDebug(`Running test executable ${targetFile} ...`);
-            const leafItems = runEnvironment.leafItemsByRootItem.get(rootItem)!;
-            return runTest({ rootItem: rootItem, leafItems: leafItems });
-        }).flatMap(rootItem => {
-            return evaluateTestResult(rootItem, runEnvironment);
-        }).subscribe({
-            next(rootItem) { logDebug(`Test evaluation done for ${rootItem.uri}`) },
-            error(err) { onTestRunFinishedWithError(testRun, runEnvironment) },
-            complete() { onAllRunsCompleted(testRun, runEnvironment) }
-        });
+        const testRunSubscription = buildTests(runEnvironment)
+            .flatMap(rootItem => observeTestExecutation(rootItem, runEnvironment))
+            .flatMap(rootItem => observeTestResult(rootItem, runEnvironment))
+            .subscribe({
+                next(rootItem) { logDebug(`Test evaluation done for ${rootItem.uri}`) },
+                error(err) { onTestRunFinishedWithError(testRun, runEnvironment) },
+                complete() { onAllRunsCompleted(testRun, runEnvironment) }
+            });
 
         const cancelListener = token.onCancellationRequested(() => {
             logDebug(`Requested cancel on test run.`);
@@ -51,6 +46,15 @@ function createRunHandler(testController: vscode.TestController) {
             cancelListener.dispose();
         });
     }
+}
+
+function observeTestExecutation(rootItem: vscode.TestItem, runEnvironment: RunEnvironment) {
+    const filePath = rootItem.uri?.fsPath!;
+    const targetFile = targetFileByUri.get(filePath)?.targetFile;
+
+    logDebug(`Running test executable ${targetFile} ...`);
+    const leafItems = runEnvironment.leafItemsByRootItem.get(rootItem)!;
+    return runTest({ rootItem: rootItem, leafItems: leafItems });
 }
 
 function startRun(testController: vscode.TestController, runRequest: vscode.TestRunRequest) {

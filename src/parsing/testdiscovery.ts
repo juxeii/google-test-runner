@@ -29,6 +29,7 @@ function printTestCases(testCases: TestCase[]) {
     testCases.forEach(tc => {
         logDebug(`Discovered testcase ${tc.name} fixture ${tc.fixture} id ${tc.id} lineNo ${tc.lineNo} `);
     });
+    return testCases;
 }
 
 function getTestCases(macroByTypes: MacroByTypes) {
