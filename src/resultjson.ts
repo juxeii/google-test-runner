@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { logDebug } from './utils/logger';
+import fs = require('fs');
 
 export type TestFailure =
     {
@@ -21,8 +22,8 @@ export type TestReport =
         failures: TestFailure[];
     }
 
-export async function createTestReportById(resultJSONUri: vscode.Uri) {
-    const parsedJSON = await parse(resultJSONUri);
+export function createTestReportById(resultJSONUri: vscode.Uri) {
+    const parsedJSON = parse(resultJSONUri);
 
     const testReportById = createTestReports(parsedJSON);
     testReportById.forEach((reports, id) => {
@@ -32,8 +33,8 @@ export async function createTestReportById(resultJSONUri: vscode.Uri) {
     return testReportById;
 }
 
-async function parse(resultJSONUri: vscode.Uri) {
-    const jsonResultRaw = await vscode.workspace.fs.readFile(resultJSONUri);
+function parse(resultJSONUri: vscode.Uri) {
+    const jsonResultRaw = fs.readFileSync(resultJSONUri.fsPath, { encoding: 'utf8', flag: 'r' });
     const jsonResult = jsonResultRaw.toString();
     return JSON.parse(jsonResult);
 }

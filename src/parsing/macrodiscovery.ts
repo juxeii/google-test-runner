@@ -16,10 +16,6 @@ const gTestMacroTypeByMacroName = new Map<string, GTestMacroType>([
 
 export async function discoverGTestMacros(document: vscode.TextDocument) {
     logDebug(`Discovering gtest macros in document ${document.uri}`);
-    return discoverMacrosInDocument(document);
-}
-
-function discoverMacrosInDocument(document: vscode.TextDocument) {
     const documentText = document.getText();
     let gTestMacros: GTestMacro[] = [];
 
@@ -33,7 +29,7 @@ function discoverMacrosInDocument(document: vscode.TextDocument) {
 
 function macroFromMatch(match: RegExpExecArray, document: vscode.TextDocument) {
     const matchPosition = document.positionAt(match.index);
-    let macro: GTestMacro = {
+    const macro: GTestMacro = {
         type: gTestMacroTypeByMacroName.get(match[1])!,
         fixture: match[2],
         id: match[3],

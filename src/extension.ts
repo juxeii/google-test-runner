@@ -112,14 +112,12 @@ function initDocumentListeners(context: vscode.ExtensionContext, testController:
         if (!editor) {
             return;
         }
-        logDebug(`onDidChangeActiveTextEditor ${editor.document.uri}`);
         if (!isDocumentValidForParsing(editor.document)) {
             return;
         }
         fillTestControllerWithTestCasesFromDocument(context, editor.document, testController);
     });
     let saveTextDocumentListener = vscode.workspace.onDidSaveTextDocument(document => {
-        logDebug(`onDidSaveTextDocument ${document.uri}`);
         fillTestControllerWithTestCasesFromDocument(context, document, testController);
     });
     let closeTextDocumentListener = vscode.workspace.onDidCloseTextDocument(document => {

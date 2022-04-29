@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as cfg from './configuration';
-import { logDebug } from './logger';
 import fs = require('fs');
 import { buildNinjaFile } from '../extension';
 
@@ -42,7 +41,6 @@ function createTargetFileByTargetMapping(fileContents: string) {
         const target = match[2];
         targetFileByTarget.set(target, targetFile);
     }
-    //targetFileByTarget.forEach((targetFile, target) => logDebug(`target ${target} targetFile ${targetFile}`));
     return targetFileByTarget;
 }
 

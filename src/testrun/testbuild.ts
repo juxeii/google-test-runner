@@ -1,24 +1,34 @@
 
+import * as vscode from 'vscode';
 import * as cfg from '../utils/configuration';
 import { startProcess } from '../utils/system';
 import { logInfo, logDebug } from '../utils/logger';
 import { RunEnvironment } from './testrun';
 import { targetFileByUri } from '../extension';
+import { Observable } from 'observable-fns';
 
 export function buildTests(runEnvironment: RunEnvironment) {
-    const targets = getTargets(runEnvironment).join(" ");
-    logInfo(`Building required test executables for target(s) ${targets}.`);
-
-    const buildFolder = cfg.getBuildFolder();
-    const cmd = `cd ${buildFolder} && ninja ${targets}`;
-    return startProcess(cmd);
+    return Observable.from(rootItems(runEnvironment)).flatMap(rootItem => {
+        const targetInfo = getTargetInfo(rootItem);
+        return buildTest(targetInfo.name, rootItem);
+    });
 }
 
-function getTargets(runEnvironment: RunEnvironment) {
-    return [...runEnvironment.leafItemsByRootItem.keys()].map(item => {
-        const uri = item.uri!;
-        const targetName = targetFileByUri.get(uri.fsPath)?.name;
-        logDebug(`Found build target ${targetName} for ${uri}`);
-        return targetName;
-    }).filter((v, i, a) => a.indexOf(v) === i);
+function buildTest(testTarget: string, rootItem: vscode.TestItem) {
+    logInfo(`Building test target ${testTarget} ...`);
+
+    const buildFolder = cfg.getBuildFolder();
+    const cmd = `cd ${buildFolder} && ninja ${testTarget}`;
+    return startProcess(cmd).flatMap(code => Observable.of(rootItem));
+}
+
+function rootItems(runEnvironment: RunEnvironment) {
+    return [...runEnvironment.leafItemsByRootItem.keys()];
+}
+
+function getTargetInfo(rootItem: vscode.TestItem) {
+    const uri = rootItem.uri!;
+    const targetInfo = targetFileByUri.get(uri.fsPath)!;
+    logDebug(`Found build target ${targetInfo.name} for ${uri}`);
+    return targetInfo;
 }

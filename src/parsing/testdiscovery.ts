@@ -1,4 +1,5 @@
 import { logDebug } from '../utils/logger';
+import { pipe } from '@mobily/ts-belt'
 import { TestCase, GTestType, GTestMacro, GTestMacroType } from '../types';
 
 const gTestTypeByMacroName = new Map<GTestMacroType, GTestType>([
@@ -9,13 +10,52 @@ const gTestTypeByMacroName = new Map<GTestMacroType, GTestType>([
     [GTestMacroType.TYPED_TEST_P, GTestType.TYPED_TEST_P]
 ]);
 
-export type MacroByTypes = {
+export interface MacroByTypes {
     testCases: GTestMacro[];
     parameterSuites: GTestMacro[];
     typedParameterSuites: GTestMacro[];
 }
 
 export function discoverTestCasesFromMacros(gTestMacros: GTestMacro[]) {
+    logDebug(`Discovering testcases from gtest macros.`);
+    return pipe(gTestMacros,
+        getMacroByTypes,
+        getTestCases,
+        printTestCases
+    )
+}
+
+function printTestCases(testCases: TestCase[]) {
+    testCases.forEach(tc => {
+        logDebug(`Discovered testcase ${tc.name} fixture ${tc.fixture} id ${tc.id} lineNo ${tc.lineNo} `);
+    });
+}
+
+function getTestCases(macroByTypes: MacroByTypes) {
+    return macroByTypes.testCases.filter(macro => {
+        if (macro.type === GTestMacroType.TEST_P) {
+            return macroByTypes.parameterSuites.find(ps => ps.id === macro.fixture);
+        }
+        if (macro.type === GTestMacroType.TYPED_TEST_P) {
+            return macroByTypes.typedParameterSuites.find(ps => ps.id === macro.fixture);
+        }
+        return true;
+    }).map(macro => createTestCase(macro, macroByTypes));
+}
+
+function createTestCase(macro: GTestMacro, macroByTypes: MacroByTypes): TestCase {
+    const { id, regExpForId } = createTestCaseId(macro, macroByTypes);
+    return {
+        fixture: macro.fixture,
+        name: macro.id,
+        id: id,
+        regExpForId: regExpForId,
+        lineNo: macro.lineNo,
+        gTestType: gTestTypeByMacroName.get(macro.type)!
+    }
+}
+
+function getMacroByTypes(gTestMacros: GTestMacro[]) {
     logDebug(`Discovering testcases from gtest macros.`);
     let macroByTypes: MacroByTypes = {
         testCases: [],
@@ -34,58 +74,55 @@ export function discoverTestCasesFromMacros(gTestMacros: GTestMacro[]) {
             macroByTypes.testCases.push(item);
         }
     });
-
-    const testCases = macroByTypes.testCases.filter(macro => {
-        if (macro.type === GTestMacroType.TEST_P) {
-            return macroByTypes.parameterSuites.find(ps => ps.id === macro.fixture);
-        }
-        if (macro.type === GTestMacroType.TYPED_TEST_P) {
-            return macroByTypes.typedParameterSuites.find(ps => ps.id === macro.fixture);
-        }
-        return true;
-    }).map(macro => {
-        const { id, regExpForId } = createTestCaseId(macro, macroByTypes);
-        let testCase: TestCase = {
-            fixture: macro.fixture,
-            name: macro.id,
-            id: id,
-            regExpForId: regExpForId,
-            lineNo: macro.lineNo,
-            gTestType: gTestTypeByMacroName.get(macro.type)!
-        }
-        return testCase;
-    });
-    testCases.forEach(tc => {
-        logDebug(`Discovered testcase name ${tc.name} fixture ${tc.fixture} id ${tc.id} lineNo ${tc.lineNo} `);
-    });
-    return testCases;
+    return macroByTypes;
 }
 
 function createTestCaseId(macro: GTestMacro, macroByTypes: MacroByTypes) {
-    const fixtureName = macro.fixture;
-    const testCaseName = macro.id;
     if (macro.type === GTestMacroType.TEST_P) {
-        const paramSuite = macroByTypes.parameterSuites.find(ps => {
-            return ps.id === macro.fixture;
-        })!;
-        const id = paramSuite.fixture + '/' + fixtureName + '.' + testCaseName + '/*';
-        const regExpForId = new RegExp(`${paramSuite.fixture}\/${fixtureName}\.${testCaseName}\/\d+`);
-        return { id, regExpForId }
+        return idForTEST_P(macro, macroByTypes);
     }
     if (macro.type === GTestMacroType.TYPED_TEST) {
-        const id = fixtureName + '/*.' + testCaseName;
-        const regExpForId = new RegExp(`${fixtureName}\/\d+\.${testCaseName}`);
-        return { id, regExpForId }
+        return idForTYPED_TEST(macro, macroByTypes);
     }
     if (macro.type === GTestMacroType.TYPED_TEST_P) {
-        const paramTypeSuite = macroByTypes.typedParameterSuites.find(tps => {
-            return tps.id === macro.fixture;
-        })!;
-        const id = paramTypeSuite.fixture + '/' + fixtureName + '/*.' + testCaseName;
-        const regExpForId = new RegExp(`${paramTypeSuite.fixture}\/${fixtureName}\/\d+\.${testCaseName}`);
-        return { id, regExpForId }
+        return idForTYPED_TEST_P(macro, macroByTypes);
     }
+    return idForTest(macro);
+}
 
+function idForTEST_P(macro: GTestMacro, macroByTypes: MacroByTypes) {
+    const fixtureName = macro.fixture;
+    const testCaseName = macro.id;
+    const paramSuite = macroByTypes.parameterSuites.find(ps => {
+        return ps.id === macro.fixture;
+    })!;
+    const id = paramSuite.fixture + '/' + fixtureName + '.' + testCaseName + '/*';
+    const regExpForId = new RegExp(`${paramSuite.fixture}\/${fixtureName}\.${testCaseName}\/\d+`);
+    return { id, regExpForId }
+}
+
+function idForTYPED_TEST(macro: GTestMacro, macroByTypes: MacroByTypes) {
+    const fixtureName = macro.fixture;
+    const testCaseName = macro.id;
+    const id = fixtureName + '/*.' + testCaseName;
+    const regExpForId = new RegExp(`${fixtureName}\/\d+\.${testCaseName}`);
+    return { id, regExpForId }
+}
+
+function idForTYPED_TEST_P(macro: GTestMacro, macroByTypes: MacroByTypes) {
+    const fixtureName = macro.fixture;
+    const testCaseName = macro.id;
+    const paramTypeSuite = macroByTypes.typedParameterSuites.find(tps => {
+        return tps.id === macro.fixture;
+    })!;
+    const id = paramTypeSuite.fixture + '/' + fixtureName + '/*.' + testCaseName;
+    const regExpForId = new RegExp(`${paramTypeSuite.fixture}\/${fixtureName}\/\d+\.${testCaseName}`);
+    return { id, regExpForId }
+}
+
+function idForTest(macro: GTestMacro) {
+    const fixtureName = macro.fixture;
+    const testCaseName = macro.id;
     const id = fixtureName + '.' + testCaseName;
     const regExpForId = new RegExp(`${fixtureName}\.${testCaseName}`);
     return { id, regExpForId };

@@ -1,21 +1,22 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
 import * as rj from '../resultjson';
 import { RunEnvironment } from './testrun';
 import { logInfo, logDebug, logError } from '../utils/logger';
-import { getJSONResultFile, lastPathOfDocumentUri } from '../utils/utils';
+import { getJSONResultFile } from '../utils/utils';
+import { multicast, Observable } from 'observable-fns';
 
-export async function evaluateTestResult(rootItem: vscode.TestItem,
-    runEnvironment: RunEnvironment,
-    onTestEvaluationDone: (item: vscode.TestItem) => void,
-    onTestEvaluationFailed: (item: vscode.TestItem) => void) {
-    const testReportById = await createTestReportById(rootItem);
-    if (hasEvaluatedWithoutErrors(rootItem, runEnvironment, testReportById)) {
-        onTestEvaluationDone(rootItem);
-    }
-    else {
-        onTestEvaluationFailed(rootItem);
-    }
+export function evaluateTestResult(rootItem: vscode.TestItem, runEnvironment: RunEnvironment) {
+    return multicast(new Observable<vscode.TestItem>(observer => {
+        const testReportById = createTestReportById(rootItem);
+        if (hasEvaluatedWithoutErrors(rootItem, runEnvironment, testReportById)) {
+            observer.next(rootItem);
+            observer.complete();
+
+        }
+        else {
+            observer.error(1)
+        }
+    }));
 }
 
 function createTestReportById(rootItem: vscode.TestItem) {

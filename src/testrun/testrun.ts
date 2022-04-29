@@ -1,18 +1,18 @@
 import * as vscode from 'vscode';
-import { logInfo, logDebug } from '../utils/logger';
+import { logInfo, logDebug, logError } from '../utils/logger';
 import { buildTests } from './testbuild';
 import { evaluateTestResult } from './testevaluation';
 import { createLeafItemsByRoot } from './testcontroller';
 import { runTest } from './testexecution';
 import { getGTestLogFile } from '../utils/utils';
 import { Observable } from 'observable-fns';
+import { targetFileByUri } from '../extension';
 
 export type RunEnvironment = {
     testRun: vscode.TestRun;
     testController: vscode.TestController;
     runRequest: vscode.TestRunRequest;
-    leafItemsByRootItem: Map<vscode.TestItem, vscode.TestItem[]>
-    testExecutionEmitter: vscode.EventEmitter<void>;
+    leafItemsByRootItem: Map<vscode.TestItem, vscode.TestItem[]>;
 }
 
 export function createTestController() {
@@ -27,11 +27,28 @@ function createRunHandler(testController: vscode.TestController) {
         token: vscode.CancellationToken
     ) {
         const testRun = startRun(testController, runRequest);
-        const runEnvironment = initializeRunEnvironment(testController, runRequest, testRun, token);
-        buildTests(runEnvironment).subscribe({
-            next(data: string) { logDebug(`${data}`) },
-            error(err) { onBuildFailed(runEnvironment) },
-            complete() { onBuildDone(runEnvironment) }
+        const runEnvironment = initializeRunEnvironment(testController, runRequest, testRun);
+        const testRunSubscription = buildTests(runEnvironment).flatMap(rootItem => {
+            const filePath = rootItem.uri?.fsPath!;
+            const targetFile = targetFileByUri.get(filePath)?.targetFile;
+
+            logDebug(`Running test executable ${targetFile} ...`);
+            const leafItems = runEnvironment.leafItemsByRootItem.get(rootItem)!;
+            return runTest({ rootItem: rootItem, leafItems: leafItems });
+        }).flatMap(rootItem => {
+            return evaluateTestResult(rootItem, runEnvironment);
+        }).subscribe({
+            next(rootItem) { logDebug(`Test evaluation done for ${rootItem.uri}`) },
+            error(err) { onTestRunFinishedWithError(testRun, runEnvironment) },
+            complete() { onAllRunsCompleted(testRun, runEnvironment) }
+        });
+
+        const cancelListener = token.onCancellationRequested(() => {
+            logDebug(`Requested cancel on test run.`);
+            skipItemsOnCancel(runEnvironment);
+            testRunSubscription.unsubscribe();
+            testRun.end();
+            cancelListener.dispose();
         });
     }
 }
@@ -61,94 +78,36 @@ function skipItemsOnCancel(runEnvironment: RunEnvironment) {
     }
 }
 
-function initializeRunEnvironment(testController: vscode.TestController,
-    runRequest: vscode.TestRunRequest,
-    testRun: vscode.TestRun,
-    token: vscode.CancellationToken) {
-
+function initializeRunEnvironment(testController: vscode.TestController, runRequest: vscode.TestRunRequest, testRun: vscode.TestRun) {
     const leafItemsByRootItem = createLeafItemsByRoot(testController, runRequest);
-    let noOfExecutedTestFiles = 0;
-    let testExecutionEmitter = new vscode.EventEmitter<void>();
-    let testExecutionListener = testExecutionEmitter.event(() => {
-        ++noOfExecutedTestFiles;
-        if (noOfExecutedTestFiles === runEnvironment.leafItemsByRootItem.size) {
-            onAllRunsCompleted(runEnvironment.testRun);
-            testExecutionListener.dispose();
-        }
-    });
-
     const runEnvironment: RunEnvironment = {
         testRun: testRun,
         testController: testController,
         runRequest: runRequest,
-        leafItemsByRootItem: leafItemsByRootItem,
-        testExecutionEmitter: testExecutionEmitter
+        leafItemsByRootItem: leafItemsByRootItem
     }
-
-    const cancelListener = token.onCancellationRequested(() => {
-        logDebug(`Requested cancel on test run.`);
-        //runEnvironment.runTasks.forEach(runTask => runTask.stop());
-        skipItemsOnCancel(runEnvironment);
-        testRun.end();
-        cancelListener.dispose();
-    });
     return runEnvironment;
 }
 
-function onBuildFailed(runEnvironment: RunEnvironment) {
-    logInfo('Building the test executables failed. Keeping test states before the build.');
-    runEnvironment.testRun.end();
-}
-
-
-function onBuildDone(runEnvironment: RunEnvironment) {
-    logInfo('Test executables successfully build.');
-    logDebug('Running test executables now...');
-    [...runEnvironment.leafItemsByRootItem].map(([rootItem, leafItems]) => {
-        const testRun = runTest({ rootItem, leafItems });
-        subscribeToTestRun(testRun, rootItem, runEnvironment);
-    });
-}
-
-function subscribeToTestRun(testRun: Observable<unknown>, rootItem: vscode.TestItem, runEnvironment: RunEnvironment) {
-    testRun.subscribe({
-        next(data: string) { logDebug(data); },
-        error(code: number) {
-            logDebug(`Execution failed with ${code}`);
-            onTestExecutionDone(rootItem, runEnvironment)
-        },
-        complete() { onTestExecutionDone(rootItem, runEnvironment) }
-    });
-}
-
-function onTestExecutionDone(rootItem: vscode.TestItem, runEnvironment: RunEnvironment) {
-    logDebug(`Test execution for ${rootItem.uri} successful.`);
-    logDebug(`Evaluating test results for ${rootItem.uri}`);
-
-    evaluateTestResult(rootItem,
-        runEnvironment,
-        rootItem => onTestEvaluationDone(rootItem, runEnvironment.testExecutionEmitter),
-        rootItem => onTestEvaluationFailed(rootItem, runEnvironment.testExecutionEmitter));
-}
-
-function onTestEvaluationDone(rootItem: vscode.TestItem, testExecutionEmitter: vscode.EventEmitter<void>) {
-    logDebug(`Test evaluation for ${rootItem.uri} finished.`);
-    const gTestLogFile = getGTestLogFile(rootItem.uri!).uri;
-    logInfo(`GTest log file: ${gTestLogFile}`);
-    logDebug(`Firing done event.`);
-    testExecutionEmitter.fire();
-}
-
-function onTestEvaluationFailed(rootItem: vscode.TestItem, testExecutionEmitter: vscode.EventEmitter<void>) {
-    logDebug(`Test evaluation for ${rootItem.uri} failed.`);
-    logDebug(`Firing done event.`);
-    testExecutionEmitter.fire();
-}
-
-function onAllRunsCompleted(run: vscode.TestRun) {
+function onTestRunFinishedWithError(run: vscode.TestRun, runEnvironment: RunEnvironment) {
     run.end();
-    logInfo('All tests completed.');
+    logInfo('***********************************************');
+    logInfo('Test run finished with errors.');
+    showLogFiles(runEnvironment);
+    logInfo('***********************************************');
+}
+
+function onAllRunsCompleted(run: vscode.TestRun, runEnvironment: RunEnvironment) {
+    run.end();
     logInfo('***********************************************');
     logInfo('Test run completed.');
+    showLogFiles(runEnvironment);
     logInfo('***********************************************');
+}
+
+function showLogFiles(runEnvironment: RunEnvironment) {
+    [...runEnvironment.leafItemsByRootItem.keys()].forEach(rootItem => {
+        const gTestLogFile = getGTestLogFile(rootItem.uri!).uri;
+        logInfo(`Log file for ${rootItem.id}: ${gTestLogFile}`);
+    });
 }

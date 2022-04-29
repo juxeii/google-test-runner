@@ -5,6 +5,7 @@ import { logDebug } from '../utils/logger';
 import { RunEnvironment } from './testrun';
 import { targetFileByUri } from '../extension';
 import { getGTestLogFile, getJSONResultFile } from '../utils/utils';
+import { Observable } from 'observable-fns';
 
 export function runTest(runParams: { rootItem: vscode.TestItem, leafItems: vscode.TestItem[] }) {
     const rootItemUri = runParams.rootItem.uri!;
@@ -15,7 +16,7 @@ export function runTest(runParams: { rootItem: vscode.TestItem, leafItems: vscod
     const gtestLogFile = getGTestLogFile(rootItemUri).baseName;
     const cmd = `cd ${cfg.getBuildFolder()} && ${targetFile} --gtest_filter=${filter} --gtest_output=json:${jsonResultFile} --verbose ${verbosityLevel} | tee ${gtestLogFile}`;
 
-    return startProcess(cmd);
+    return startProcess(cmd, false).flatMap(code => Observable.of(runParams.rootItem));
 }
 
 function createRunFilter(items: vscode.TestItem[]) {
