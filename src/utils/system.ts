@@ -1,6 +1,6 @@
 import * as cp from "child_process";
 import * as kill from 'tree-kill'
-import { logDebug } from './logger';
+import { logDebug, logError, logInfo } from './logger';
 import { Observable, multicast, SubscriptionObserver } from "observable-fns"
 
 export function startProcess(cmd: string, logStdOut: boolean = false) {
@@ -12,22 +12,27 @@ function createSubscriber(cmd: string, observer: SubscriptionObserver<any>, logS
     const childProcess = cp.spawn(cmd, { shell: true });
     let hasExited = { value: false };
     configureHandlers(childProcess, observer, hasExited, logStdOut);
-    return () => onUnsubscribe(childProcess, hasExited)
+
+    return () => onUnsubscribe(childProcess, hasExited);
 }
 
 function onUnsubscribe(childProcess: cp.ChildProcessWithoutNullStreams, hasExited: { value: boolean }) {
     if (hasExited) {
-        return
+        return;
     }
-    if (!childProcess.killed) {
-        kill(childProcess.pid, 'SIGINT');
-        logDebug(`Killed process id ${childProcess.pid}`);
-    }
+    kill(childProcess.pid, 'SIGINT');
+    logDebug(`Killed test build pid ${childProcess.pid}`);
 }
 
 function configureHandlers(childProcess: cp.ChildProcessWithoutNullStreams, observer: SubscriptionObserver<any>, hasExited: { value: boolean }, logStdOut: boolean) {
-    childProcess.stdout.on('data', data => {
-        if (logStdOut) {
+    childProcess.stdout.on('data', (data: string) => {
+        if (data.includes('ninja: build stopped: subcommand failed')) {
+            logError(`${data}`);
+        }
+        else if (data.includes('ninja: build stopped: interrupted by user')) {
+            logInfo(`${data}`);
+        }
+        else if (logStdOut) {
             logDebug(`${data}`);
         }
     });

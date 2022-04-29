@@ -39,11 +39,13 @@ function createRunHandler(testController: vscode.TestController) {
             });
 
         const cancelListener = token.onCancellationRequested(() => {
-            logDebug(`Requested cancel on test run.`);
             skipItemsOnCancel(runEnvironment);
             testRunSubscription.unsubscribe();
             testRun.end();
             cancelListener.dispose();
+            logInfo('***********************************************');
+            logInfo('Test run cancelled.');
+            logInfo('***********************************************');
         });
     }
 }
@@ -97,7 +99,6 @@ function onTestRunFinishedWithError(run: vscode.TestRun, runEnvironment: RunEnvi
     run.end();
     logInfo('***********************************************');
     logInfo('Test run finished with errors.');
-    showLogFiles(runEnvironment);
     logInfo('***********************************************');
 }
 
