@@ -4,7 +4,7 @@ import * as path from 'path';
 import { buildNinjaFile } from '../extension';
 
 export const extensionName = 'GoogleTestRunner';
-const configurationId = 'googleTestRunner';
+const configurationId = 'googletestrunner';
 
 export function getBuildFolder() {
     const buildFolderFromConfig = getConfigurationSetting('buildFolder');
@@ -17,7 +17,7 @@ export function getBuildFolder() {
 }
 
 export function hasConfigurationChanged(event: vscode.ConfigurationChangeEvent) {
-    return event.affectsConfiguration("configurationId.buildFolder");
+    return event.affectsConfiguration(configurationId + '.buildFolder');
 }
 
 export function isConfigurationValid() {

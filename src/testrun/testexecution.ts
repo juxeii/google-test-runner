@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import * as cfg from '../utils/configuration';
 import { startProcess } from '../utils/system';
 import { logDebug } from '../utils/logger';
-import { RunEnvironment } from './testrun';
 import { targetFileByUri } from '../extension';
 import { getGTestLogFile, getJSONResultFile } from '../utils/utils';
 import { Observable } from 'observable-fns';
