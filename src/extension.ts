@@ -26,18 +26,12 @@ const registerDisposable = (disposable: vscode.Disposable): R.Reader<ExtEnvironm
     return env.context.subscriptions.push(disposable);
 };
 
-const getBuildNinjaListener = (): R.Reader<ExtEnvironment, vscode.FileSystemWatcher> => env => {
-    logInfo(`Listening to ${env.buildNinjaFileName} file creation/changes in build folder ${env.buildFolder}.`);
-    return vscode.workspace.createFileSystemWatcher(
-        new vscode.RelativePattern(env.buildFolder, `${buildNinjaFile}`)
-    );
-};
-
 const listenForCreateOnBuildNinja = (listener: vscode.FileSystemWatcher): R.Reader<ExtEnvironment, vscode.Disposable> => env => {
     logInfo(`listen for create`);
     return listener.onDidCreate(uri => {
         logInfo(`${env.buildNinjaFileName} created at ${uri}.`);
-        onNewBuildFolder(listener, env.context, env.testController);
+        listener.dispose();
+        onNewBuildFolder(env.context, env.testController);
     });
 };
 
@@ -58,12 +52,12 @@ const listenForDeleteOnBuildNinja = (listener: vscode.FileSystemWatcher): R.Read
     });
 };
 
-const initConfigurationListener = (listener: vscode.FileSystemWatcher): R.Reader<ExtEnvironment, vscode.Disposable> => env => {
+const initConfigurationListener = (): R.Reader<ExtEnvironment, vscode.Disposable> => env => {
     logInfo(`listen for config`);
     return vscode.workspace.onDidChangeConfiguration(event => {
         logInfo(`config changed!.`);
         if (cfg.hasConfigurationChanged(event)) {
-            onNewBuildFolder(listener, env.context, env.testController);
+            onNewBuildFolder(env.context, env.testController);
         }
         else {
             logInfo(`no buld folder!!`);
@@ -76,6 +70,13 @@ export function activate(context: vscode.ExtensionContext) {
     initExtension(context);
 }
 
+const getBuildNinjaListener = (): R.Reader<ExtEnvironment, vscode.FileSystemWatcher> => env => {
+    logInfo(`Listening to ${env.buildNinjaFileName} file creation/changes in build folder ${env.buildFolder}.`);
+    return vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(env.buildFolder, `${buildNinjaFile}`)
+    );
+};
+
 function createBuildNinjaListener(context: vscode.ExtensionContext, testController: vscode.TestController) {
     const environment: ExtEnvironment = {
         context: context,
@@ -83,26 +84,36 @@ function createBuildNinjaListener(context: vscode.ExtensionContext, testControll
         buildFolder: cfg.getBuildFolder(),
         buildNinjaFileName: buildNinjaFile
     };
-    let ninjaListener = pipe(environment, getBuildNinjaListener)(environment);
+    //let ninjaListener = pipe(getBuildNinjaListener);
+    let ninjaListener = pipe(getBuildNinjaListener)()(environment);
     pipe(ninjaListener, listenForCreateOnBuildNinja,)(environment);
     pipe(ninjaListener, listenForChangeOnBuildNinja,)(environment);
     pipe(ninjaListener, listenForDeleteOnBuildNinja,)(environment);
-    pipe(ninjaListener, initConfigurationListener,)(environment);
+    //pipe(ninjaListener, initConfigurationListener,)(environment);
     return ninjaListener;
 }
 
 function initExtension(context: vscode.ExtensionContext) {
     let testController = initTestController(context);
 
+    const environment: ExtEnvironment = {
+        context: context,
+        testController: testController,
+        buildFolder: cfg.getBuildFolder(),
+        buildNinjaFileName: buildNinjaFile
+    };
+    //let ninjaListener = pipe(getBuildNinjaListener);
+    //let ninjaListener = pipe(getBuildNinjaListener)()(environment);
+    pipe(initConfigurationListener(), chain(registerDisposable))(environment);
+
     createBuildNinjaListener(context, testController);
     initDocumentListeners(context, testController);
     processConfigurationStatus(context, testController);
 }
 
-function onNewBuildFolder(buildNinjaListener: vscode.FileSystemWatcher, context: vscode.ExtensionContext, testController: vscode.TestController) {
+function onNewBuildFolder(context: vscode.ExtensionContext, testController: vscode.TestController) {
     logInfo(`onNewBuildFolder`);
-    buildNinjaListener.dispose();
-    buildNinjaListener = createBuildNinjaListener(context, testController);
+    createBuildNinjaListener(context, testController);
     resetStatus(testController);
     processConfigurationStatus(context, testController);
 }
