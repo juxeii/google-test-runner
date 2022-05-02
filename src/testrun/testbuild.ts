@@ -14,7 +14,7 @@ export function buildTests(runEnvironment: RunEnvironment) {
     });
 }
 
-function buildTest(testTarget: string, rootItem: vscode.TestItem) {
+export function buildTest(testTarget: string, rootItem: vscode.TestItem) {
     logInfo(`Building test target ${testTarget} ...`);
 
     const buildFolder = cfg.getBuildFolder();

@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { logInfo, logDebug, logError } from '../utils/logger';
-import { buildTests } from './testbuild';
+import { buildTest, buildTests } from './testbuild';
 import { observeTestResult } from './testevaluation';
 import { createLeafItemsByRoot } from './testcontroller';
 import { runTest } from './testexecution';
 import { getGTestLogFile } from '../utils/utils';
 import { targetFileByUri } from '../extension';
+import * as cfg from '../utils/configuration';
 
 export type RunEnvironment = {
     testRun: vscode.TestRun;
@@ -37,33 +38,41 @@ function createDebugHandler(testController: vscode.TestController) {
             return;
         }
 
-        logInfo('***********************************************');
-        logInfo('Started debug session.');
-        logInfo('***********************************************');
         const testItem = runRequest.include[0];
-        const testCaseName = testItem.label;
-        const targetFile = targetFileByUri.get(testItem.uri!.fsPath)!.targetFile;
-        const cwd = path.dirname(targetFile);
-        logInfo(`Debugging testcase ${testCaseName} in executable ${targetFile}.`);
-
-        const workspaceFolder = vscode.workspace.workspaceFolders![0];
-        vscode.debug.startDebugging(workspaceFolder, {
-            'name': 'GTestRunner Debug',
-            'type': 'cppdbg',
-            'request': 'launch',
-            'program': targetFile,
-            'stopAtEntry': false,
-            'cwd': cwd,
-            'externalConsole': false,
-            'MIMode': 'gdb',
-            'preLaunchTask': 'ninja build active file',
+        const targetName = targetFileByUri.get(testItem.uri!.fsPath)!.name;
+        buildTest(targetName, testItem).subscribe({
+            next(rootItem) { logDebug(`Debug build finished.`) },
+            error(err) { logError(`Debug build failed!`) },
+            complete() { debug() }
         });
 
-        vscode.debug.onDidTerminateDebugSession((e) => {
+        function debug() {
             logInfo('***********************************************');
-            logInfo('Debug session ended.');
+            logInfo('Debug session started.');
             logInfo('***********************************************');
-        });
+            const targetFile = targetFileByUri.get(testItem.uri!.fsPath)!.targetFile;
+            const cwd = path.dirname(targetFile);
+            const workspaceFolder = vscode.workspace.workspaceFolders![0];
+            const testCaseName = testItem.label;
+            logInfo(`Debugging testcase ${testCaseName} in executable ${targetFile}.`);
+
+            vscode.debug.onDidTerminateDebugSession((e) => {
+                logInfo('***********************************************');
+                logInfo('Debug session ended.');
+                logInfo('***********************************************');
+            });
+
+            vscode.debug.startDebugging(workspaceFolder, {
+                'name': 'GTestRunner Debug',
+                'type': 'cppdbg',
+                'request': 'launch',
+                'program': targetFile,
+                'stopAtEntry': false,
+                'cwd': cwd,
+                'externalConsole': false,
+                'MIMode': 'gdb'
+            });
+        }
     }
 }
 
