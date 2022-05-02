@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { logInfo, logDebug, logError } from '../utils/logger';
 import { buildTests } from './testbuild';
 import { observeTestResult } from './testevaluation';
 import { createLeafItemsByRoot } from './testcontroller';
 import { runTest } from './testexecution';
 import { getGTestLogFile } from '../utils/utils';
-import { Observable } from 'observable-fns';
 import { targetFileByUri } from '../extension';
 
 export type RunEnvironment = {
@@ -18,7 +18,53 @@ export type RunEnvironment = {
 export function createTestController() {
     let testController = vscode.tests.createTestController('GoogleTestController', 'GoogleTestController');
     testController.createRunProfile('Run Tests', vscode.TestRunProfileKind.Run, createRunHandler(testController), true);
+    testController.createRunProfile('Debug Tests', vscode.TestRunProfileKind.Debug, createDebugHandler(testController), true);
     return testController;
+}
+
+function createDebugHandler(testController: vscode.TestController) {
+    return async function debugHandler(
+        runRequest: vscode.TestRunRequest,
+        token: vscode.CancellationToken
+    ) {
+
+        if (!vscode.extensions.getExtension('ms-vscode.cpptools')) {
+            logInfo('Please install ms-vscode.cpptools extension in order to debug testcases!');
+            return;
+        }
+        if (!runRequest.include || runRequest.include.length > 1) {
+            logInfo('Only one testcase at a time is supported for debugging.');
+            return;
+        }
+
+        logInfo('***********************************************');
+        logInfo('Started debug session.');
+        logInfo('***********************************************');
+        const testItem = runRequest.include[0];
+        const testCaseName = testItem.label;
+        const targetFile = targetFileByUri.get(testItem.uri!.fsPath)!.targetFile;
+        const cwd = path.dirname(targetFile);
+        logInfo(`Debugging testcase ${testCaseName} in executable ${targetFile}.`);
+
+        const workspaceFolder = vscode.workspace.workspaceFolders![0];
+        vscode.debug.startDebugging(workspaceFolder, {
+            'name': 'GTestRunner Debug',
+            'type': 'cppdbg',
+            'request': 'launch',
+            'program': targetFile,
+            'stopAtEntry': false,
+            'cwd': cwd,
+            'externalConsole': false,
+            'MIMode': 'gdb',
+            'preLaunchTask': 'ninja build active file',
+        });
+
+        vscode.debug.onDidTerminateDebugSession((e) => {
+            logInfo('***********************************************');
+            logInfo('Debug session ended.');
+            logInfo('***********************************************');
+        });
+    }
 }
 
 function createRunHandler(testController: vscode.TestController) {
