@@ -1,7 +1,4 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as path from 'path';
-import { buildNinjaFile } from '../extension';
 
 export const extensionName = 'GoogleTestRunner';
 const configurationId = 'googletestrunner';
@@ -16,12 +13,8 @@ export function getBuildFolder() {
     return buildFolderFromConfig!;
 }
 
-export function hasConfigurationChanged(event: vscode.ConfigurationChangeEvent) {
+export function hasBuildFolderChanged(event: vscode.ConfigurationChangeEvent) {
     return event.affectsConfiguration(configurationId + '.buildFolder');
-}
-
-export function isConfigurationValid() {
-    return isBuildNinjaFilePresent();
 }
 
 export function logLevel() {
@@ -30,11 +23,6 @@ export function logLevel() {
 
 export function gtestVerbosityLevel() {
     return getConfigurationSetting('gtestVerbosityLevel')!;
-}
-
-function isBuildNinjaFilePresent() {
-    let buildNinjaPath = path.join(getBuildFolder(), buildNinjaFile);
-    return fs.existsSync(buildNinjaPath);
 }
 
 function getConfiguration() {

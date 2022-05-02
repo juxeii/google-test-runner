@@ -1,248 +1,243 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 import * as R from 'fp-ts/Reader';
+import * as path from 'path';
 import * as cfg from './utils/configuration';
+import { logDebug, logError, logInfo } from './utils/logger';
+import { TargetByInfo, createTargetByFileMapping, lastPathOfDocumentUri } from './utils/utils';
+import { pipe } from 'fp-ts/lib/function';
 import { createTestController } from './testrun/testrun';
 import { discoverGTestMacros } from './parsing/macrodiscovery';
-import { updateTestControllerFromDocument } from './testrun/testcontroller';
-import { logDebug, logInfo } from './utils/logger';
 import { discoverTestCasesFromMacros } from './parsing/testdiscovery';
-import { createTargetByFileMapping, lastPathOfDocumentUri, TargetByInfo } from './utils/utils';
-import { pipe } from 'fp-ts/function'
-import { chain, map } from 'fp-ts/Reader'
+import { updateTestControllerFromDocument } from './testrun/testcontroller';
 
 export const buildNinjaFile = 'build.ninja';
 export let targetFileByUri: Map<string, TargetByInfo>;
-let parsedFiles = new Set<vscode.Uri>();
-let noTestFiles = new Set<vscode.Uri>();
 
 type ExtEnvironment = {
     context: vscode.ExtensionContext;
     testController: vscode.TestController;
-    buildFolder: string;
     buildNinjaFileName: string;
+    buildFolder: () => string;
+    buildFolderListener: vscode.FileSystemWatcher | undefined;
+    activeTextEditorListener: vscode.Disposable | undefined;
+    saveTextDocumentListener: vscode.Disposable | undefined;
+    closeTextDocumentListener: vscode.Disposable | undefined;
+    parsedFiles: Set<vscode.Uri>;
+    noTestFiles: Set<vscode.Uri>;
 }
-
-const registerDisposable = (disposable: vscode.Disposable): R.Reader<ExtEnvironment, number> => env => {
-    return env.context.subscriptions.push(disposable);
-};
-
-const listenForCreateOnBuildNinja = (listener: vscode.FileSystemWatcher): R.Reader<ExtEnvironment, vscode.Disposable> => env => {
-    logInfo(`listen for create`);
-    return listener.onDidCreate(uri => {
-        logInfo(`${env.buildNinjaFileName} created at ${uri}.`);
-        listener.dispose();
-        onNewBuildFolder(env.context, env.testController);
-    });
-};
-
-const listenForChangeOnBuildNinja = (listener: vscode.FileSystemWatcher): R.Reader<ExtEnvironment, vscode.Disposable> => env => {
-    logInfo(`listen for change`);
-    return listener.onDidChange(uri => {
-        logInfo(`${buildNinjaFile} changed at ${uri}.`);
-        resetStatus(env.testController);
-        getTargetMappings();
-    });
-};
-
-const listenForDeleteOnBuildNinja = (listener: vscode.FileSystemWatcher): R.Reader<ExtEnvironment, vscode.Disposable> => env => {
-    logInfo(`listen for delete`);
-    return listener.onDidDelete(uri => {
-        logInfo(`${buildNinjaFile} deleted ${uri}.`);
-        processConfigurationStatus(env.context, env.testController);
-    });
-};
-
-const initConfigurationListener = (): R.Reader<ExtEnvironment, vscode.Disposable> => env => {
-    logInfo(`listen for config`);
-    return vscode.workspace.onDidChangeConfiguration(event => {
-        logInfo(`config changed!.`);
-        if (cfg.hasConfigurationChanged(event)) {
-            onNewBuildFolder(env.context, env.testController);
-        }
-        else {
-            logInfo(`no buld folder!!`);
-        }
-    });
-};
 
 export function activate(context: vscode.ExtensionContext) {
     logInfo(`${cfg.extensionName} activated.`);
-    initExtension(context);
+
+    const environment = createExtEnvironment(context);
+    pipe(
+        context,
+        createConfigurationListener,
+        R.chain(registerDisposable),
+        R.chain(onNewBuildFolder)
+    )(environment);
 }
 
-const getBuildNinjaListener = (): R.Reader<ExtEnvironment, vscode.FileSystemWatcher> => env => {
-    logInfo(`Listening to ${env.buildNinjaFileName} file creation/changes in build folder ${env.buildFolder}.`);
-    return vscode.workspace.createFileSystemWatcher(
-        new vscode.RelativePattern(env.buildFolder, `${buildNinjaFile}`)
-    );
-};
-
-function createBuildNinjaListener(context: vscode.ExtensionContext, testController: vscode.TestController) {
-    const environment: ExtEnvironment = {
+const createExtEnvironment = (context: vscode.ExtensionContext): ExtEnvironment => {
+    return {
         context: context,
-        testController: testController,
-        buildFolder: cfg.getBuildFolder(),
-        buildNinjaFileName: buildNinjaFile
-    };
-    //let ninjaListener = pipe(getBuildNinjaListener);
-    let ninjaListener = pipe(getBuildNinjaListener)()(environment);
-    pipe(ninjaListener, listenForCreateOnBuildNinja,)(environment);
-    pipe(ninjaListener, listenForChangeOnBuildNinja,)(environment);
-    pipe(ninjaListener, listenForDeleteOnBuildNinja,)(environment);
-    //pipe(ninjaListener, initConfigurationListener,)(environment);
-    return ninjaListener;
+        testController: initTestController(context),
+        buildNinjaFileName: buildNinjaFile,
+        buildFolder: cfg.getBuildFolder,
+        buildFolderListener: undefined,
+        activeTextEditorListener: undefined,
+        saveTextDocumentListener: undefined,
+        closeTextDocumentListener: undefined,
+        parsedFiles: new Set<vscode.Uri>(),
+        noTestFiles: new Set<vscode.Uri>()
+    }
 }
 
-function initExtension(context: vscode.ExtensionContext) {
-    let testController = initTestController(context);
-
-    const environment: ExtEnvironment = {
-        context: context,
-        testController: testController,
-        buildFolder: cfg.getBuildFolder(),
-        buildNinjaFileName: buildNinjaFile
-    };
-    //let ninjaListener = pipe(getBuildNinjaListener);
-    //let ninjaListener = pipe(getBuildNinjaListener)()(environment);
-    pipe(initConfigurationListener(), chain(registerDisposable))(environment);
-
-    createBuildNinjaListener(context, testController);
-    initDocumentListeners(context, testController);
-    processConfigurationStatus(context, testController);
+const onNewBuildFolder = (): R.Reader<ExtEnvironment, void> => env => {
+    if (!fs.existsSync(env.buildFolder())) {
+        showInvalidBuildFolderMessage(env.buildFolder())
+        return;
+    }
+    logDebug(`Build folder is ${env.buildFolder()}.`);
+    resetExt(env);
 }
 
-function onNewBuildFolder(context: vscode.ExtensionContext, testController: vscode.TestController) {
-    logInfo(`onNewBuildFolder`);
-    createBuildNinjaListener(context, testController);
-    resetStatus(testController);
-    processConfigurationStatus(context, testController);
+const resetExt = (env: ExtEnvironment): void => {
+    pipe(
+        resetData,
+        R.chain(createBuildNinjaListener),
+        R.chain(listenForCreateOnBuildNinja),
+        R.chain(listenForChangeOnBuildNinja),
+        R.chain(listenForDeleteOnBuildNinja),
+        R.chain(registerDisposable),
+        R.chain(processBuildManifest)
+    )(env);
 }
 
-function resetStatus(testController: vscode.TestController) {
-    const noItems: vscode.TestItem[] = [];
-    testController.items.replace(noItems);
-    parsedFiles.clear();
-    noTestFiles.clear();
-}
-
-async function processConfigurationStatus(context: vscode.ExtensionContext, testController: vscode.TestController) {
-    logInfo(`processConfigurationStatus`);
-    if (cfg.isConfigurationValid()) {
-        await getTargetMappings();
-        logConfigurationDone();
-        parseCurrentEditor(context, testController);
+const processBuildManifest = (): R.Reader<ExtEnvironment, void> => env => {
+    if (!isBuildNinjaFilePresent()) {
+        buildManifestMissingMessage(env.buildFolder());
     }
     else {
-        showMisConfigurationMessage();
-        resetStatus(testController);
+        pipe(
+            initExtDataForNewManifest(),
+            R.chain(initDocumentListeners),
+            R.chain(parseCurrentDocument)
+        )(env);
     }
 }
 
-function parseCurrentEditor(context: vscode.ExtensionContext, testController: vscode.TestController) {
+const resetData = (): R.Reader<ExtEnvironment, void> => env => {
+    logDebug(`Resetting extension because of build configuration change.`);
+    env.testController.items.replace([]);
+    env.parsedFiles.clear();
+    env.noTestFiles.clear();
+    if (env.buildFolderListener) {
+        env.buildFolderListener.dispose();
+    }
+}
+
+const initExtDataForNewManifest = (): R.Reader<ExtEnvironment, void> => env => {
+    targetFileByUri = createTargetByFileMapping();
+    if (env.activeTextEditorListener) {
+        env.activeTextEditorListener.dispose();
+        env.saveTextDocumentListener!.dispose();
+        env.closeTextDocumentListener!.dispose();
+    }
+}
+
+const parseCurrentDocument = (): R.Reader<ExtEnvironment, void> => env => {
     const currentWindow = vscode.window.activeTextEditor;
-    if (currentWindow && isDocumentValidForParsing(currentWindow.document)) {
-        fillTestControllerWithTestCasesFromDocument(context, currentWindow.document, testController);
+    if (currentWindow) {
+        fillTestControllerWithTestCasesFromDocument(currentWindow.document)(env);
     }
 }
 
-function isDocumentValidForParsing(document: vscode.TextDocument) {
-    if (document.uri.scheme != 'file') {
-        return false;
+const fillTestControllerWithTestCasesFromDocument = (document: vscode.TextDocument): R.Reader<ExtEnvironment, void> => async env => {
+    if (!isDocumentValidForParsing(document)(env)) {
+        return;
     }
-
-    if (noTestFiles.has(document.uri)) {
-        logDebug(`File ${document.uri} has no tests. No need to reparse.`);
-        return false;
-    }
-
-    if (parsedFiles.has(document.uri) && !document.isDirty) {
-        return false;
-    }
-
-    const languageName = document.languageId;
-    return languageName && languageName === "cpp";
+    handleValidDocument(document)(env);
 }
 
-async function fillTestControllerWithTestCasesFromDocument(context: vscode.ExtensionContext, document: vscode.TextDocument, testController: vscode.TestController) {
+const handleValidDocument = (document: vscode.TextDocument): R.Reader<ExtEnvironment, void> => async env => {
     const macros = await discoverGTestMacros(document);
     const testCases = discoverTestCasesFromMacros(macros);
     if (testCases.length < 1) {
-        noTestFiles.add(document.uri);
+        env.noTestFiles.add(document.uri);
         logDebug(`Adding ${document.uri} to set of files with no tests.`);
         return;
     }
 
-    noTestFiles.delete(document.uri);
-    updateTestControllerFromDocument(document, testController, testCases);
-    logDebug(`Current testcontroller item size ${testController.items.size}`);
-    parsedFiles.add(document.uri);
+    env.noTestFiles.delete(document.uri);
+    updateTestControllerFromDocument(document, env.testController, testCases);
+    logDebug(`Current testcontroller item size ${env.testController.items.size}`);
+    env.parsedFiles.add(document.uri);
 }
 
-function initTestController(context: vscode.ExtensionContext) {
+const isDocumentValidForParsing = (document: vscode.TextDocument): R.Reader<ExtEnvironment, boolean> => env => {
+    if (document.uri.scheme != 'file') {
+        return false;
+    }
+    if (env.noTestFiles.has(document.uri)) {
+        logDebug(`File ${document.uri} has no tests. No need to reparse.`);
+        return false;
+    }
+    if (env.parsedFiles.has(document.uri) && !document.isDirty) {
+        return false;
+    }
+    return document.languageId === "cpp";
+}
+
+const initDocumentListeners = (): R.Reader<ExtEnvironment, void> => env => {
+    env.activeTextEditorListener = vscode.window.onDidChangeActiveTextEditor(editor => {
+        if (!editor) {
+            return;
+        }
+        fillTestControllerWithTestCasesFromDocument(editor.document)(env);
+    });
+    env.saveTextDocumentListener = vscode.workspace.onDidSaveTextDocument(document => {
+        handleValidDocument(document)(env);
+    });
+    env.closeTextDocumentListener = vscode.workspace.onDidCloseTextDocument(document => {
+        const fileName = path.basename(document.uri.fsPath);
+        env.testController.items.delete(fileName);
+    })
+    env.context.subscriptions.push(env.activeTextEditorListener);
+    env.context.subscriptions.push(env.saveTextDocumentListener);
+    env.context.subscriptions.push(env.closeTextDocumentListener);
+}
+
+const initTestController = (context: vscode.ExtensionContext): vscode.TestController => {
     let testController = createTestController();
     context.subscriptions.push(testController);
     return testController;
 }
 
-function initDocumentListeners(context: vscode.ExtensionContext, testController: vscode.TestController) {
-    let activeTextEditorListener = vscode.window.onDidChangeActiveTextEditor(editor => {
-        if (!editor) {
-            return;
+const createConfigurationListener = (context: vscode.ExtensionContext): R.Reader<ExtEnvironment, vscode.Disposable> => env => {
+    const configurationListener = vscode.workspace.onDidChangeConfiguration(event => {
+        if (cfg.hasBuildFolderChanged(event)) {
+            onNewBuildFolder()(env);
         }
-        if (!isDocumentValidForParsing(editor.document)) {
-            return;
-        }
-        fillTestControllerWithTestCasesFromDocument(context, editor.document, testController);
     });
-    let saveTextDocumentListener = vscode.workspace.onDidSaveTextDocument(document => {
-        fillTestControllerWithTestCasesFromDocument(context, document, testController);
+    context.subscriptions.push(configurationListener);
+    logDebug(`Created configuration listener.`);
+    return configurationListener;
+};
+
+const createBuildNinjaListener = (): R.Reader<ExtEnvironment, vscode.FileSystemWatcher> => env => {
+    logInfo(`Listening to ${env.buildNinjaFileName} file creation/changes in build folder ${env.buildFolder()}.`);
+    const listener = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(env.buildFolder(), `${buildNinjaFile}`)
+    );
+    env.buildFolderListener = listener;
+    return listener;
+};
+
+const listenForCreateOnBuildNinja = (listener: vscode.FileSystemWatcher): R.Reader<ExtEnvironment, vscode.FileSystemWatcher> => env => {
+    listener.onDidCreate(uri => {
+        logInfo(`${env.buildNinjaFileName} created at ${uri}.`);
+        resetExt(env);
     });
-    let closeTextDocumentListener = vscode.workspace.onDidCloseTextDocument(document => {
-        const baseName = lastPathOfDocumentUri(document.uri);
-        testController.items.delete(baseName);
-    })
-    context.subscriptions.push(activeTextEditorListener);
-    context.subscriptions.push(saveTextDocumentListener);
-    context.subscriptions.push(closeTextDocumentListener);
-}
+    return listener;
+};
 
-function logConfigurationDone() {
-    let buildFolder = cfg.getBuildFolder();
-    logInfo(`Configuring GoogleTestRunner with ${buildNinjaFile} in ${buildFolder} done.`);
-}
+const listenForChangeOnBuildNinja = (listener: vscode.FileSystemWatcher): R.Reader<ExtEnvironment, vscode.FileSystemWatcher> => env => {
+    listener.onDidChange(uri => {
+        logInfo(`${env.buildNinjaFileName} changed at ${uri}.`);
+        resetExt(env);
+    });
+    return listener;
+};
 
-function showMisConfigurationMessage() {
-    let buildFolder = cfg.getBuildFolder();
-    const misconfiguredMsg = `GoogleTestRunner needs the ${buildNinjaFile} file to work. Please run cmake configure at least once with your configured build folder ${buildFolder}.`;
-    logInfo(misconfiguredMsg);
+const listenForDeleteOnBuildNinja = (listener: vscode.FileSystemWatcher): R.Reader<ExtEnvironment, vscode.FileSystemWatcher> => env => {
+    listener.onDidDelete(uri => {
+        logInfo(`${env.buildNinjaFileName} deleted ${uri}.`);
+        resetExt(env);
+    });
+    return listener;
+};
+
+const showInvalidBuildFolderMessage = (invalidFolder: string) => {
+    const misconfiguredMsg = `The provided build folder ${invalidFolder} does not exist. Please change to an existing build folder via settings menu.`;
+    logError(misconfiguredMsg);
     vscode.window.showWarningMessage(misconfiguredMsg)
 }
 
-// function createBuildNinjaListener(context: vscode.ExtensionContext, testController: vscode.TestController) {
-//     let buildFolder = cfg.getBuildFolder();
-//     let listener = vscode.workspace.createFileSystemWatcher(
-//         new vscode.RelativePattern(buildFolder, `${buildNinjaFile}`)
-//     );
-//     listener.onDidCreate(uri => {
-//         logInfo(`${buildNinjaFile} created at ${uri}.`);
-//         onNewBuildFolder(context, testController);
-//     });
-//     listener.onDidChange(uri => {
-//         logInfo(`${buildNinjaFile} changed at ${uri}.`);
-//         resetStatus(testController);
-//         getTargetMappings();
-//     });
-//     listener.onDidDelete(uri => {
-//         logInfo(`${buildNinjaFile} deleted ${uri}.`);
-//         processConfigurationStatus(context, testController);
-//     });
-//     context.subscriptions.push(listener);
-//     logInfo(`Listening to ${buildNinjaFile} file creation/changes in build folder ${buildFolder}.`);
-//     return listener;
-// }
+const registerDisposable = (disposable: vscode.Disposable): R.Reader<ExtEnvironment, void> => env => {
+    env.context.subscriptions.push(disposable);
+};
 
-async function getTargetMappings() {
-    targetFileByUri = await createTargetByFileMapping();
+const isBuildNinjaFilePresent = (): boolean => {
+    let buildNinjaPath = path.join(cfg.getBuildFolder(), buildNinjaFile);
+    return fs.existsSync(buildNinjaPath);
+}
+
+const buildManifestMissingMessage = (buildFolder: string): void => {
+    const noBuildManifestMessage = `GoogleTestRunner needs the ${buildNinjaFile} file to work. Please run cmake configure at least once with your configured build folder ${buildFolder}.`;
+    logInfo(noBuildManifestMessage);
+    vscode.window.showWarningMessage(noBuildManifestMessage)
 }
 
 export function deactivate() {

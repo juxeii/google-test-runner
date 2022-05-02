@@ -57,7 +57,6 @@ function createTestCase(macro: GTestMacro, macroByTypes: MacroByTypes): TestCase
 }
 
 function getMacroByTypes(gTestMacros: GTestMacro[]) {
-    logDebug(`Discovering testcases from gtest macros.`);
     let macroByTypes: MacroByTypes = {
         testCases: [],
         parameterSuites: [],
@@ -83,7 +82,7 @@ function createTestCaseId(macro: GTestMacro, macroByTypes: MacroByTypes) {
         return idForTEST_P(macro, macroByTypes);
     }
     if (macro.type === GTestMacroType.TYPED_TEST) {
-        return idForTYPED_TEST(macro, macroByTypes);
+        return idForTYPED_TEST(macro);
     }
     if (macro.type === GTestMacroType.TYPED_TEST_P) {
         return idForTYPED_TEST_P(macro, macroByTypes);
@@ -102,7 +101,7 @@ function idForTEST_P(macro: GTestMacro, macroByTypes: MacroByTypes) {
     return { id, regExpForId }
 }
 
-function idForTYPED_TEST(macro: GTestMacro, macroByTypes: MacroByTypes) {
+function idForTYPED_TEST(macro: GTestMacro) {
     const fixtureName = macro.fixture;
     const testCaseName = macro.id;
     const id = fixtureName + '/*.' + testCaseName;

@@ -11,7 +11,7 @@ export type TargetByInfo = {
     targetFile: string;
 }
 
-export async function createTargetByFileMapping() {
+export function createTargetByFileMapping() {
     const buildFolder = cfg.getBuildFolder();
     const pathf = path.join(buildFolder, buildNinjaFile);
     const rawContents = fs.readFileSync(pathf);
