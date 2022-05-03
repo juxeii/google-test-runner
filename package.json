@@ -50,6 +50,11 @@
                         "error"
                     ],
                     "default": "debug"
+                },
+                "googletestrunner.loadSharedLibsOnDebug": {
+                    "type": "boolean",
+                    "default": "true",
+                    "description": "Loads all shared libraries and symbols and debug attach. Disable it to get faster startup. You can manually add libs later."
                 }
             }
         }

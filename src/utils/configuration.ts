@@ -4,7 +4,7 @@ export const extensionName = 'GoogleTestRunner';
 const configurationId = 'googletestrunner';
 
 export function getBuildFolder() {
-    const buildFolderFromConfig = getConfigurationSetting('buildFolder');
+    const buildFolderFromConfig = getConfigurationSetting<string>('buildFolder');
     const workspaceFolder: string = vscode.workspace.workspaceFolders![0].uri.path;
     const regExpFolder = /\$\{workspaceFolder\}/;
     if (buildFolderFromConfig) {
@@ -18,17 +18,21 @@ export function hasBuildFolderChanged(event: vscode.ConfigurationChangeEvent) {
 }
 
 export function logLevel() {
-    return getConfigurationSetting('logLevel')!;
+    return getConfigurationSetting<string>('logLevel')!;
 }
 
 export function gtestVerbosityLevel() {
-    return getConfigurationSetting('gtestVerbosityLevel')!;
+    return getConfigurationSetting<string>('gtestVerbosityLevel')!;
+}
+
+export function loadSharedLibsOnDebug() {
+    return getConfigurationSetting<boolean>('loadSharedLibsOnDebug')!;
 }
 
 function getConfiguration() {
     return vscode.workspace.getConfiguration(configurationId);
 }
 
-function getConfigurationSetting(setting: string) {
-    return getConfiguration().get<string>(setting)!;
+function getConfigurationSetting<T>(setting: string) {
+    return getConfiguration().get<T>(setting)!;
 }

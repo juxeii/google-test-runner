@@ -7,6 +7,7 @@ import { createLeafItemsByRoot } from './testcontroller';
 import { runTest } from './testexecution';
 import { getGTestLogFile } from '../utils/utils';
 import { targetFileByUri } from '../extension';
+import { loadSharedLibsOnDebug } from '../utils/configuration';
 
 export type RunEnvironment = {
     testRun: vscode.TestRun;
@@ -46,9 +47,7 @@ function createDebugHandler(testController: vscode.TestController) {
         });
 
         function debug() {
-            logInfo('***********************************************');
-            logInfo('Debug session started.');
-            logInfo('***********************************************');
+            printBlock('Debug session started.');
             const targetFile = targetFileByUri.get(testItem.uri!.fsPath)!.targetFile;
             const cwd = path.dirname(targetFile);
             const workspaceFolder = vscode.workspace.workspaceFolders![0];
@@ -56,9 +55,7 @@ function createDebugHandler(testController: vscode.TestController) {
             logInfo(`Debugging testcase ${testCaseName} in executable ${targetFile}.`);
 
             vscode.debug.onDidTerminateDebugSession((e) => {
-                logInfo('***********************************************');
-                logInfo('Debug session ended.');
-                logInfo('***********************************************');
+                printBlock('Debug session ended.');
             });
 
             vscode.debug.startDebugging(workspaceFolder, {
@@ -70,7 +67,7 @@ function createDebugHandler(testController: vscode.TestController) {
                 'cwd': cwd,
                 'externalConsole': false,
                 "symbolLoadInfo": {
-                    "loadAll": false,
+                    "loadAll": loadSharedLibsOnDebug(),
                     "exceptionList": ""
                 },
             });
@@ -103,12 +100,6 @@ function createRunHandler(testController: vscode.TestController) {
             printBlock('Test run cancelled.');
         });
     }
-}
-
-function printBlock(blockText: string) {
-    logInfo('***********************************************');
-    logInfo(blockText);
-    logInfo('***********************************************');
 }
 
 function observeTestExecutation(rootItem: vscode.TestItem, runEnvironment: RunEnvironment) {
@@ -161,10 +152,8 @@ function onTestRunFinishedWithError(run: vscode.TestRun) {
 
 function onAllRunsCompleted(run: vscode.TestRun, runEnvironment: RunEnvironment) {
     run.end();
-    logInfo('***********************************************');
-    logInfo('Test run completed.');
     showLogFiles(runEnvironment);
-    logInfo('***********************************************');
+    printBlock('Test run completed.');
 }
 
 function showLogFiles(runEnvironment: RunEnvironment) {
@@ -172,4 +161,10 @@ function showLogFiles(runEnvironment: RunEnvironment) {
         const gTestLogFile = getGTestLogFile(rootItem.uri!).uri;
         logInfo(`Log file for ${rootItem.id}: ${gTestLogFile}`);
     });
+}
+
+function printBlock(blockText: string) {
+    logInfo('***********************************************');
+    logInfo(blockText);
+    logInfo('***********************************************');
 }
