@@ -43,7 +43,7 @@ export const observeTestCases = (): Observable<ParseResult> => {
     }));
 }
 
-const resetEnvironment = (): void => {
+export const resetEnvironment = (): void => {
     pipe(
         env.observer,
         map(o => o.complete)

@@ -1,38 +1,63 @@
 import * as vscode from 'vscode';
-import * as R from 'fp-ts/Reader';
-import { ExtEnvironment } from './extension';
 import { logDebug, logInfo } from './utils/logger';
 import { map, Option } from 'fp-ts/lib/Option';
 import { pipe } from 'fp-ts/lib/function';
+import * as cfg from './utils/configuration';
+import { multicast, Observable } from 'observable-fns';
 
-export const createConfigurationListener = (configHandler: (event: vscode.ConfigurationChangeEvent) => void): vscode.Disposable => {
-    const configurationListener = vscode.workspace.onDidChangeConfiguration(configHandler);
-    logDebug(`Created configuration listener.`);
-    return configurationListener;
+export const enum BuildNinjaUpdate {
+    CREATE,
+    CHANGE,
+    DELETE
 };
 
-export const createBuildNinjaListener = (): R.Reader<ExtEnvironment, vscode.FileSystemWatcher> => env => {
+export const observeConfiguration = (): Observable<vscode.ConfigurationChangeEvent> => {
+    return multicast(new Observable<vscode.ConfigurationChangeEvent>(observer => {
+        const configurationListener = vscode.workspace.onDidChangeConfiguration((event) => observer.next(event));
+        logDebug(`Created configuration listener.`);
+        return () => {
+            logDebug(`Unsubscribing from configuration updates.`);
+            configurationListener.dispose();
+        };
+    }));
+};
+
+export const observeBuildNinja = (buildNinjaFileName: string): Observable<BuildNinjaUpdate> => {
+    const buildNinjaListener = createBuildNinjaListener(buildNinjaFileName);
+    return multicast(new Observable<BuildNinjaUpdate>(observer => {
+        listenForCreateOnBuildNinja(buildNinjaListener, (_) => observer.next(BuildNinjaUpdate.CREATE));
+        listenForChangeOnBuildNinja(buildNinjaListener, (_) => observer.next(BuildNinjaUpdate.CHANGE));
+        listenForDeleteOnBuildNinja(buildNinjaListener, (_) => observer.next(BuildNinjaUpdate.DELETE));
+
+        return () => {
+            logDebug(`Unsubscribing from ${buildNinjaFileName} file updates.`);
+            buildNinjaListener.dispose();
+        };
+    }));
+};
+
+const createBuildNinjaListener = (buildNinjaFileName: string): vscode.FileSystemWatcher => {
+    const buildFolder = cfg.getBuildFolder();
     const listener = vscode.workspace.createFileSystemWatcher(
-        new vscode.RelativePattern(env.buildFolder(), `${env.buildNinjaFileName}`)
+        new vscode.RelativePattern(buildFolder, buildNinjaFileName)
     );
-    env.context.subscriptions.push(listener);
-    logInfo(`Listening to ${env.buildNinjaFileName} file creation/changes in build folder ${env.buildFolder()}.`);
+    logInfo(`Listening to ${buildNinjaFileName} file creation/changes in build folder ${buildFolder}.`);
     return listener;
 };
 
-export const listenForCreateOnBuildNinja = (listener: vscode.FileSystemWatcher, uriHandler: (uri: vscode.Uri) => void): vscode.FileSystemWatcher => {
+const listenForCreateOnBuildNinja = (listener: vscode.FileSystemWatcher, uriHandler: (uri: vscode.Uri) => void): vscode.FileSystemWatcher => {
     listener.onDidCreate(uriHandler);
     logDebug(`Created build ninja on create listener.`);
     return listener;
 };
 
-export const listenForChangeOnBuildNinja = (listener: vscode.FileSystemWatcher, uriHandler: (uri: vscode.Uri) => void): vscode.FileSystemWatcher => {
+const listenForChangeOnBuildNinja = (listener: vscode.FileSystemWatcher, uriHandler: (uri: vscode.Uri) => void): vscode.FileSystemWatcher => {
     listener.onDidChange(uriHandler);
     logDebug(`Created build ninja on change listener.`);
     return listener;
 };
 
-export const listenForDeleteOnBuildNinja = (listener: vscode.FileSystemWatcher, uriHandler: (uri: vscode.Uri) => void): vscode.FileSystemWatcher => {
+const listenForDeleteOnBuildNinja = (listener: vscode.FileSystemWatcher, uriHandler: (uri: vscode.Uri) => void): vscode.FileSystemWatcher => {
     listener.onDidDelete(uriHandler);
     logDebug(`Created build ninja on delete listener.`);
     return listener;
