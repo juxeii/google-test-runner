@@ -7,7 +7,6 @@ import { createLeafItemsByRoot } from './testcontroller';
 import { runTest } from './testexecution';
 import { getGTestLogFile } from '../utils/utils';
 import { targetFileByUri } from '../extension';
-import * as cfg from '../utils/configuration';
 
 export type RunEnvironment = {
     testRun: vscode.TestRun;
@@ -70,7 +69,10 @@ function createDebugHandler(testController: vscode.TestController) {
                 'stopAtEntry': false,
                 'cwd': cwd,
                 'externalConsole': false,
-                'MIMode': 'gdb'
+                "symbolLoadInfo": {
+                    "loadAll": false,
+                    "exceptionList": ""
+                },
             });
         }
     }
@@ -89,7 +91,7 @@ function createRunHandler(testController: vscode.TestController) {
             .flatMap(rootItem => observeTestResult(rootItem, runEnvironment))
             .subscribe({
                 next(rootItem) { logDebug(`Test evaluation done for ${rootItem.uri}`) },
-                error(err) { onTestRunFinishedWithError(testRun, runEnvironment) },
+                error(err) { onTestRunFinishedWithError(testRun) },
                 complete() { onAllRunsCompleted(testRun, runEnvironment) }
             });
 
@@ -98,11 +100,15 @@ function createRunHandler(testController: vscode.TestController) {
             testRunSubscription.unsubscribe();
             testRun.end();
             cancelListener.dispose();
-            logInfo('***********************************************');
-            logInfo('Test run cancelled.');
-            logInfo('***********************************************');
+            printBlock('Test run cancelled.');
         });
     }
+}
+
+function printBlock(blockText: string) {
+    logInfo('***********************************************');
+    logInfo(blockText);
+    logInfo('***********************************************');
 }
 
 function observeTestExecutation(rootItem: vscode.TestItem, runEnvironment: RunEnvironment) {
@@ -115,9 +121,7 @@ function observeTestExecutation(rootItem: vscode.TestItem, runEnvironment: RunEn
 }
 
 function startRun(testController: vscode.TestController, runRequest: vscode.TestRunRequest) {
-    logInfo('***********************************************');
-    logInfo('Starting test run...');
-    logInfo('***********************************************');
+    printBlock('Starting test run...');
     const testRun = testController.createTestRun(runRequest);
     showItemSpinners(testController, runRequest, testRun);
     return testRun;
@@ -150,11 +154,9 @@ function initializeRunEnvironment(testController: vscode.TestController, runRequ
     return runEnvironment;
 }
 
-function onTestRunFinishedWithError(run: vscode.TestRun, runEnvironment: RunEnvironment) {
+function onTestRunFinishedWithError(run: vscode.TestRun) {
     run.end();
-    logInfo('***********************************************');
-    logInfo('Test run finished with errors.');
-    logInfo('***********************************************');
+    printBlock('Test run finished with errors.');
 }
 
 function onAllRunsCompleted(run: vscode.TestRun, runEnvironment: RunEnvironment) {

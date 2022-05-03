@@ -1,5 +1,5 @@
 import { logDebug } from '../utils/logger';
-import { pipe } from '@mobily/ts-belt'
+import { pipe } from 'fp-ts/lib/function';
 import { TestCase, GTestType, GTestMacro, GTestMacroType } from '../types';
 
 const gTestTypeByMacroName = new Map<GTestMacroType, GTestType>([
