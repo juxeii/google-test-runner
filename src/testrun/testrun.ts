@@ -6,7 +6,7 @@ import { observeTestResult } from './testevaluation';
 import { createLeafItemsByRoot } from './testcontroller';
 import { runTest } from './testexecution';
 import { getGTestLogFile } from '../utils/utils';
-import { targetFileByUri } from '../extension';
+import { targetInfoByFile } from '../extension';
 import { loadSharedLibsOnDebug } from '../utils/configuration';
 
 export type RunEnvironment = {
@@ -17,7 +17,7 @@ export type RunEnvironment = {
 }
 
 export function createTestController() {
-    let testController = vscode.tests.createTestController('GoogleTestController', 'GoogleTestController');
+    const testController = vscode.tests.createTestController('GoogleTestController', 'GoogleTestController');
     testController.createRunProfile('Run Tests', vscode.TestRunProfileKind.Run, createRunHandler(testController), true);
     testController.createRunProfile('Debug Tests', vscode.TestRunProfileKind.Debug, createDebugHandler(testController), true);
     return testController;
@@ -39,7 +39,7 @@ function createDebugHandler(testController: vscode.TestController) {
         }
 
         const testItem = runRequest.include[0];
-        const targetName = targetFileByUri.get(testItem.uri!.fsPath)!.name;
+        const targetName = targetInfoByFile.get(testItem.uri!.fsPath)!.name;
         buildTest(targetName, testItem).subscribe({
             next(rootItem) { logDebug(`Debug build finished.`) },
             error(err) { logError(`Debug build failed!`) },
@@ -48,7 +48,7 @@ function createDebugHandler(testController: vscode.TestController) {
 
         function debug() {
             printBlock('Debug session started.');
-            const targetFile = targetFileByUri.get(testItem.uri!.fsPath)!.targetFile;
+            const targetFile = targetInfoByFile.get(testItem.uri!.fsPath)!.targetFile;
             const cwd = path.dirname(targetFile);
             const workspaceFolder = vscode.workspace.workspaceFolders![0];
             const testCaseName = testItem.label;
@@ -104,7 +104,7 @@ function createRunHandler(testController: vscode.TestController) {
 
 function observeTestExecutation(rootItem: vscode.TestItem, runEnvironment: RunEnvironment) {
     const filePath = rootItem.uri?.fsPath!;
-    const targetFile = targetFileByUri.get(filePath)?.targetFile;
+    const targetFile = targetInfoByFile.get(filePath)?.targetFile;
 
     logDebug(`Running test executable ${targetFile} ...`);
     const leafItems = runEnvironment.leafItemsByRootItem.get(rootItem)!;

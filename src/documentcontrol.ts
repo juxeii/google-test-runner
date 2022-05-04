@@ -1,112 +1,189 @@
 import * as vscode from 'vscode';
-import { logDebug } from './utils/logger';
+import { logDebug, logError } from './utils/logger';
 import { discoverGTestMacros } from './parsing/macrodiscovery';
 import { discoverTestCasesFromMacros } from './parsing/testdiscovery';
-import { TestCase } from './types';
-import { Observable, multicast } from "observable-fns"
+import { targetInfoByFile } from './extension';
+import { GTestMacro, TestCase } from './types';
+import { Observable, multicast, Subscription } from "observable-fns"
 import { SubscriptionObserver } from 'observable-fns/dist/observable';
 import { map, none, Option, some } from 'fp-ts/lib/Option';
 import { pipe } from 'fp-ts/lib/function';
-import { disposeOptionalListener, listenForChangeInEditor, listenForDocumentClose, listenForDocumentSave } from './listener';
+import { observeDidChangeActiveEditor, observeDidCloseTextDocument, observeDidSaveTextDocument } from './listener';
+import { updateTestControllerFromDocument } from './testrun/testcontroller';
+import path = require('path');
+import { createMachine, EventObject, interpret, InterpreterFrom } from 'xstate';
+import * as R from 'fp-ts/Reader';
+import { boolean } from 'fp-ts';
 
 type DocumentEnvironment = {
-    observer: Option<SubscriptionObserver<ParseResult>>;
-    parsedFiles: Set<vscode.Uri>;
-    noTestFiles: Set<vscode.Uri>;
-    activeTextEditorListener: Option<vscode.Disposable>;
-    saveTextDocumentListener: Option<vscode.Disposable>;
-    closeTextDocumentListener: Option<vscode.Disposable>;
+    testController: vscode.TestController;
+    listenerForEditorChange: Option<Subscription<vscode.TextEditor>>;
+    listenerForDocumentSave: Option<Subscription<vscode.TextDocument>>;
+    listenerForDocumentClose: Option<Subscription<vscode.TextDocument>>;
+    documentFsmByUri: Map<vscode.Uri, DocumentFsm>;
 }
 
-const env: DocumentEnvironment = {
-    observer: none,
-    parsedFiles: new Set<vscode.Uri>(),
-    noTestFiles: new Set<vscode.Uri>(),
-    activeTextEditorListener: none,
-    saveTextDocumentListener: none,
-    closeTextDocumentListener: none
-}
-
-export type ParseResult = {
+type FsmEnvironment = {
+    testController: vscode.TestController;
     document: vscode.TextDocument;
-    testCases: TestCase[];
+    fsm: DocumentFsm | undefined;
 }
 
-export const observeTestCases = (): Observable<ParseResult> => {
-    resetEnvironment();
-    return multicast(new Observable<ParseResult>(observer => {
-        env.observer = some(observer);
-        env.activeTextEditorListener = some(listenForChangeInEditor(onEditorChange));
-        env.saveTextDocumentListener = some(listenForDocumentSave(onDocumentSave));
-        env.closeTextDocumentListener = some(listenForDocumentClose(onDocumentClose));
-        parseActiveDocument();
-    }));
+const onStart = (environment: FsmEnvironment) => {
+    logDebug(`Document FSM: Enter start.`);
+    parseDocument()(environment);
 }
 
-export const resetEnvironment = (): void => {
+const onTestsPresent = () => {
+    logDebug(`Document FSM: Enter onTestsPresent.`);
+}
+
+const onTestsAbsent = (environment: FsmEnvironment) => {
+    logDebug(`Document FSM: Enter onTestsAbsent.`);
+    removeDocumentItems(environment.document, environment.testController);
+}
+
+const createDocumentMachine = (environment: FsmEnvironment) => createMachine(
+    {
+        id: "document",
+        initial: "start",
+        context: environment,
+        states: {
+            start: {
+                onEntry: ["onStart"],
+                on: {
+                    PARSED_TESTS: "onTestsPresent",
+                    PARSED_NO_TESTS: "onTestsAbsent"
+                },
+            },
+            onTestsPresent: {
+                onEntry: ["onTestsPresent"],
+                on: {
+                    SAVED: "start"
+                },
+            },
+            onTestsAbsent: {
+                onEntry: ["onTestsAbsent"],
+                on: {
+                    SAVED: "start"
+                }
+            }
+        }
+    },
+    {
+        actions: {
+            onStart,
+            onTestsPresent,
+            onTestsAbsent
+        }
+    }
+);
+type DocumentFsm = InterpreterFrom<typeof createDocumentMachine>;
+
+export const initDocumentControl = (testController: vscode.TestController): vscode.Disposable => {
+    const environment = createEnvironment(testController);
+
+    resetDocumentEnvironment();
+    environment.listenerForEditorChange = some(observeDidChangeActiveEditor().subscribe(editor => onEditorSwitch(editor)(environment)));
+    environment.listenerForDocumentSave = some(observeDidSaveTextDocument().subscribe(document => onDocumentSave(document)(environment)));
+    environment.listenerForDocumentClose = some(observeDidCloseTextDocument().subscribe(document => onDocumentClose(document)(environment)));
+    parseActiveDocument()(environment);
+
+    return new vscode.Disposable(() => resetDocumentEnvironment()(environment));
+}
+
+const createEnvironment = (testController: vscode.TestController): DocumentEnvironment => {
+    return {
+        testController: testController,
+        listenerForEditorChange: none,
+        listenerForDocumentSave: none,
+        listenerForDocumentClose: none,
+        documentFsmByUri: new Map<vscode.Uri, DocumentFsm>()
+    }
+}
+
+const resetDocumentEnvironment = (): R.Reader<DocumentEnvironment, void> => env => {
+    logDebug(`Called reset on document controller`);
+    unsubscribeDocumentObservers(env.listenerForEditorChange);
+    unsubscribeDocumentObservers(env.listenerForDocumentSave);
+    unsubscribeDocumentObservers(env.listenerForDocumentClose);
+    env.documentFsmByUri.clear();
+    env.testController.items.replace([]);
+}
+
+const unsubscribeDocumentObservers = <T>(subscription: Option<Subscription<T>>): void => {
     pipe(
-        env.observer,
-        map(o => o.complete)
-    );
-    env.noTestFiles.clear();
-    env.parsedFiles.clear();
-    disposeOptionalListener(env.activeTextEditorListener);
-    disposeOptionalListener(env.saveTextDocumentListener);
-    disposeOptionalListener(env.closeTextDocumentListener);
-}
-
-const onNextParseResult = (parseResult: ParseResult): void => {
-    pipe(
-        env.observer,
-        map(o => o.next(parseResult))
+        subscription,
+        map(s => s.unsubscribe())
     );
 }
 
-const onEditorChange = (editor: vscode.TextEditor): void => {
+const createDocumentFsm = (document: vscode.TextDocument): R.Reader<DocumentEnvironment, DocumentFsm> => env => {
+    const fsmEnvironment: FsmEnvironment = {
+        testController: env.testController,
+        document: document,
+        fsm: undefined
+    }
+    const documentMachine = createDocumentMachine(fsmEnvironment);
+    const fsm = interpret(documentMachine);
+    fsmEnvironment.fsm = fsm;
+    fsm.start();
+    return fsm;
+}
+
+const getDocumentFsm = (document: vscode.TextDocument): R.Reader<DocumentEnvironment, DocumentFsm> => env => {
+    const uri = document.uri;
+    const fsm = env.documentFsmByUri.get(uri);
+    if (fsm) {
+        return fsm;
+    }
+    const newFsm = createDocumentFsm(document)(env);
+    env.documentFsmByUri.set(uri, newFsm);
+    return newFsm;
+}
+
+const onEditorSwitch = (editor: vscode.TextEditor): R.Reader<DocumentEnvironment, void> => env => {
     const document = editor.document;
-    const processCondition = isFileType(document) &&
-        isCPlusPlusLanguage(document)
-        && !env.noTestFiles.has(document.uri)
-        && !(env.parsedFiles.has(document.uri));
-    if (processCondition) {
-        parseDocument(document);
-    }
-};
-
-const onDocumentSave = (document: vscode.TextDocument): void => {
-    const processCondition = isFileType(document) && isCPlusPlusLanguage(document);
-    if (processCondition) {
-        parseDocument(document);
-    }
-};
-
-const onDocumentClose = (document: vscode.TextDocument): void => {
-    if (env.parsedFiles.has(document.uri)) {
-        onNextParseResult({ document: document, testCases: [] });
-    }
-};
-
-export const parseActiveDocument = (): void => {
-    const currentWindow = vscode.window.activeTextEditor;
-    if (currentWindow) {
-        const document = currentWindow.document;
-        logDebug(`Parsing active document ${document.uri}`);
-        parseDocument(document);
-    }
-}
-
-const parseDocument = async (document: vscode.TextDocument): Promise<void> => {
-    const testCases = await createTestCases(document)
-    if (testCases.length < 1) {
-        env.noTestFiles.add(document.uri);
-        logDebug(`Adding ${document.uri} to set of files with no tests.`);
+    if (!isInBuildManifest(document)) {
         return;
     }
-    else {
-        env.noTestFiles.delete(document.uri);
-        env.parsedFiles.add(document.uri);
+    getDocumentFsm(document)(env);
+};
+
+const onDocumentSave = (document: vscode.TextDocument): R.Reader<DocumentEnvironment, void> => env => {
+    if (!isInBuildManifest(document)) {
+        return;
     }
-    onNextParseResult({ document: document, testCases: testCases });
+    getDocumentFsm(document)(env).send({ type: 'SAVED' });
+};
+
+const onDocumentClose = (document: vscode.TextDocument): R.Reader<DocumentEnvironment, void> => env => {
+    const uri = document.uri;
+    env.documentFsmByUri.delete(uri);
+    removeDocumentItems(document, env.testController);
+};
+
+const removeDocumentItems = (document: vscode.TextDocument, testController: vscode.TestController): void => {
+    const fileName = path.basename(document.uri.fsPath);
+    testController.items.delete(fileName);
+}
+
+const parseActiveDocument = (): R.Reader<DocumentEnvironment, void> => env => {
+    const editor = vscode.window.activeTextEditor;
+    if (editor) {
+        onEditorSwitch(editor)(env);
+    }
+}
+
+const parseDocument = (): R.Reader<FsmEnvironment, void> => async env => {
+    const testCases = await createTestCases(env.document);
+    if (testCases.length < 1) {
+        env.fsm!.send({ type: 'PARSED_NO_TESTS' });
+    }
+    else {
+        updateTestControllerFromDocument(env.document, env.testController, testCases);
+        env.fsm!.send({ type: 'PARSED_TESTS' });
+    }
 }
 
 const createTestCases = async (document: vscode.TextDocument): Promise<TestCase[]> => {
@@ -114,10 +191,6 @@ const createTestCases = async (document: vscode.TextDocument): Promise<TestCase[
     return discoverTestCasesFromMacros(macros);
 };
 
-const isFileType = (document: vscode.TextDocument): boolean => {
-    return document.uri.scheme === 'file';
-};
-
-const isCPlusPlusLanguage = (document: vscode.TextDocument): boolean => {
-    return document.languageId === 'cpp';
+const isInBuildManifest = (document: vscode.TextDocument): boolean => {
+    return targetInfoByFile.has(document.uri.fsPath);
 };

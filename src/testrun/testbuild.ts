@@ -4,7 +4,7 @@ import * as cfg from '../utils/configuration';
 import { startProcess } from '../utils/system';
 import { logInfo, logDebug } from '../utils/logger';
 import { RunEnvironment } from './testrun';
-import { targetFileByUri } from '../extension';
+import { targetInfoByFile } from '../extension';
 import { Observable } from 'observable-fns';
 
 export function buildTests(runEnvironment: RunEnvironment) {
@@ -19,7 +19,7 @@ export function buildTest(testTarget: string, rootItem: vscode.TestItem) {
 
     const buildFolder = cfg.getBuildFolder();
     const cmd = `cd ${buildFolder} && ninja ${testTarget}`;
-    return startProcess(cmd).flatMap(code => Observable.of(rootItem));
+    return startProcess(cmd, true).flatMap(code => Observable.of(rootItem));
 }
 
 function rootItems(runEnvironment: RunEnvironment) {
@@ -28,7 +28,7 @@ function rootItems(runEnvironment: RunEnvironment) {
 
 function getTargetInfo(rootItem: vscode.TestItem) {
     const uri = rootItem.uri!;
-    const targetInfo = targetFileByUri.get(uri.fsPath)!;
+    const targetInfo = targetInfoByFile.get(uri.fsPath)!;
     logDebug(`Found build target ${targetInfo.name} for ${uri}`);
     return targetInfo;
 }

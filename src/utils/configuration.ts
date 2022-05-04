@@ -1,5 +1,8 @@
+import path = require('path');
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 
+export const buildNinjaFileName = 'build.ninja';
 export const extensionName = 'GoogleTestRunner';
 const configurationId = 'googletestrunner';
 
@@ -27,6 +30,15 @@ export function gtestVerbosityLevel() {
 
 export function loadSharedLibsOnDebug() {
     return getConfigurationSetting<boolean>('loadSharedLibsOnDebug')!;
+}
+
+export const isBuildNinjaFilePresent = (): boolean => {
+    const buildNinjaPath = path.join(getBuildFolder(), buildNinjaFileName);
+    return fs.existsSync(buildNinjaPath);
+}
+
+export const doesFolderExist = (folder: string): boolean => {
+    return fs.existsSync(folder);
 }
 
 function getConfiguration() {

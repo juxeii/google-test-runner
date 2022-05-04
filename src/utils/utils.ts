@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as cfg from './configuration';
 import fs = require('fs');
-import { buildNinjaFile } from '../extension';
 import { logDebug } from './logger';
 import { resolve } from 'path';
 
@@ -13,7 +12,7 @@ export type TargetByInfo = {
 
 export function createTargetByFileMapping() {
     const buildFolder = cfg.getBuildFolder();
-    const pathf = path.join(buildFolder, buildNinjaFile);
+    const pathf = path.join(buildFolder, cfg.buildNinjaFileName);
     const rawContents = fs.readFileSync(pathf);
     return fillMappingWithTargetInfo(rawContents.toString());
 }
