@@ -37,10 +37,6 @@ export const isBuildNinjaFilePresent = (): boolean => {
     return fs.existsSync(buildNinjaPath);
 }
 
-export const doesFolderExist = (folder: string): boolean => {
-    return fs.existsSync(folder);
-}
-
 function getConfiguration() {
     return vscode.workspace.getConfiguration(configurationId);
 }
