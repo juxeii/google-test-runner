@@ -145,17 +145,15 @@ const getDocumentFsm = (document: vscode.TextDocument): R.Reader<DocumentEnviron
 
 const onEditorSwitch = (editor: vscode.TextEditor): R.Reader<DocumentEnvironment, void> => env => {
     const document = editor.document;
-    if (!isInBuildManifest(document)(env)) {
-        return;
+    if (isInBuildManifest(document)(env)) {
+        getDocumentFsm(document)(env);
     }
-    getDocumentFsm(document)(env);
 };
 
 const onDocumentSave = (document: vscode.TextDocument): R.Reader<DocumentEnvironment, void> => env => {
-    if (!isInBuildManifest(document)(env)) {
-        return;
+    if (isInBuildManifest(document)(env)) {
+        getDocumentFsm(document)(env).send({ type: 'SAVED' });
     }
-    getDocumentFsm(document)(env).send({ type: 'SAVED' });
 };
 
 const onDocumentClose = (document: vscode.TextDocument): R.Reader<DocumentEnvironment, void> => env => {

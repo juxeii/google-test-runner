@@ -14,44 +14,17 @@ export type ExtEnvironment = {
     context: vscode.ExtensionContext;
     testController: vscode.TestController;
     targetInfoByFile: Map<string, TargetByInfo>;
-    buildNinjaFileName: string;
-    buildFolder: () => string;
 }
-
-const onStart = () => {
-    logDebug(`FSM: Enter start.`);
-}
-
-const onInvalidBuildFolder = (context: GTestContext) => {
-    logDebug(`FSM: Enter invalid build folder.`);
-    resetExtension()(context.environment)
-    showInvalidBuildFolderMessage();
-}
-
-const onValidBuildFolder = (context: GTestContext) => {
-    logDebug(`FSM: Enter valid build folder.`);
-    resetExtension()(context.environment);
-}
-
-const onBuildPresent = (context: GTestContext) => {
-    logDebug(`FSM: Enter build present.`);
-    processBuildManifest()(context.environment);
-}
-
-const onBuildAbsent = (context: GTestContext) => {
-    logDebug(`FSM: Enter build absent.`);
-    resetExtension()(context.environment);
-    showBuildManifestMissingMessage()(context.environment);
-}
-
 interface GTestContext {
     environment: ExtEnvironment,
-    buildFolderObserver: ActorRef<any, any> | undefined;
-    buildNinjaObserver: ActorRef<any, any> | undefined;
-    documentActor: ActorRef<any, any> | undefined;
+    buildFolderObserver?: ActorRef<any, any>;
+    buildNinjaObserver?: ActorRef<any, any>;
+    documentActor?: ActorRef<any, any>;
 }
 
-const createGTestMachine = (environment: ExtEnvironment) => createMachine<GTestContext>({
+const getMachine = () => createMachine({
+    //const createGTestMachine = (environment: ExtEnvironment) => createMachine({
+    tsTypes: {} as import("./extension.typegen").Typegen0,
     schema: {
         context: {} as GTestContext,
         events: {} as
@@ -63,37 +36,22 @@ const createGTestMachine = (environment: ExtEnvironment) => createMachine<GTestC
     },
     id: "gtestrunnerfsm",
     initial: "start",
-    context: {
-        environment: environment,
-        buildFolderObserver: undefined,
-        buildNinjaObserver: undefined,
-        documentActor: undefined
-    },
     states: {
         start: {
-            entry: [onStart,
-                assign({
-                    buildFolderObserver: () => spawn(subscribeToBuildFolderUpdates)
-                }), assign({
-                    documentActor: () => spawn((_, receiver) => createDocumentActor(environment, receiver), 'documentActor')
-                })],
+            entry: ['onStart', 'initBuildFolderObserver', 'initDocumentActor'],
             on: {
                 VALID_BUILD_FOLDER: "validbuildfolder",
                 INVALID_BUILD_FOLDER: "nobuildfolder"
             },
         },
         nobuildfolder: {
-            entry: [onInvalidBuildFolder,
-                send({ type: 'INVALID_BUILD_FOLDER' }, { to: 'buildNinjaObserver' }),
-                send({ type: 'RESYNC' }, { to: 'documentActor' })],
+            entry: ['onInvalidBuildFolder', 'sendInvalidBuildFolderToBuildNinjaObserver', 'sendDocumentResync'],
             on: {
                 VALID_BUILD_FOLDER: "validbuildfolder"
             },
         },
         validbuildfolder: {
-            entry: [onValidBuildFolder, assign({
-                buildNinjaObserver: () => spawn((callback, receiver) => subscribeToBuildNinjaUpdates(callback, receiver)(environment), 'buildNinjaObserver')
-            })],
+            entry: ['onValidBuildFolder', 'initBuildNinjaObserver'],
             on: {
                 INVALID_BUILD_FOLDER: "nobuildfolder",
                 BUILD_NINJA_CREATED: "buildPresent",
@@ -101,7 +59,7 @@ const createGTestMachine = (environment: ExtEnvironment) => createMachine<GTestC
             }
         },
         buildAbsent: {
-            entry: [onBuildAbsent, send({ type: 'RESYNC' }, { to: 'documentActor' })],
+            entry: ['onBuildAbsent', 'sendDocumentResync'],
             on: {
                 VALID_BUILD_FOLDER: "validbuildfolder",
                 INVALID_BUILD_FOLDER: "nobuildfolder",
@@ -109,7 +67,7 @@ const createGTestMachine = (environment: ExtEnvironment) => createMachine<GTestC
             }
         },
         buildPresent: {
-            entry: [onBuildPresent, send({ type: 'RESYNC' }, { to: 'documentActor' })],
+            entry: ['onBuildPresent', 'sendDocumentResync'],
             on: {
                 VALID_BUILD_FOLDER: "validbuildfolder",
                 INVALID_BUILD_FOLDER: "nobuildfolder",
@@ -119,7 +77,42 @@ const createGTestMachine = (environment: ExtEnvironment) => createMachine<GTestC
             },
         }
     }
-});
+},
+    {
+        actions: {
+            onStart: () => logDebug(`FSM: Enter start.`),
+            onInvalidBuildFolder: (context) => {
+                logDebug(`FSM: Enter valid build folder.`);
+                resetExtension()(context.environment);
+                showInvalidBuildFolderMessage();
+            },
+            onValidBuildFolder: (context) => {
+                logDebug(`FSM: Enter invalid build folder.`);
+                resetExtension()(context.environment);
+            },
+            onBuildAbsent: (context) => {
+                logDebug(`FSM: Enter build absent.`);
+                resetExtension()(context.environment);
+                showBuildManifestMissingMessage();
+            },
+            onBuildPresent: (context) => {
+                logDebug(`FSM: Enter build present.`);
+                processBuildManifest()(context.environment);
+            },
+            initBuildFolderObserver: assign({
+                buildFolderObserver: (_) => spawn(subscribeToBuildFolderUpdates)
+            }),
+            initDocumentActor: assign({
+                documentActor: (context) => spawn((_, receiver) => createDocumentActor(context.environment, receiver))
+            }),
+            initBuildNinjaObserver: assign({
+                buildNinjaObserver: (context) => spawn((callback, receiver) => subscribeToBuildNinjaUpdates(callback, receiver)(context.environment))
+            }),
+            sendDocumentResync: send({ type: 'RESYNC' }, { to: context => context.documentActor! }),
+            sendInvalidBuildFolderToBuildNinjaObserver: send({ type: 'INVALID_BUILD_FOLDER' }, { to: context => context.buildNinjaObserver! })
+        }
+    }
+);
 
 export function activate(context: vscode.ExtensionContext) {
     logInfo(`${cfg.extensionName} activated.`);
@@ -127,9 +120,9 @@ export function activate(context: vscode.ExtensionContext) {
     pipe(
         context,
         createExtEnvironment,
-        createGTestMachine,
+        env => getMachine().withContext({ environment: env }),
         interpret,
-        gTestFsm => gTestFsm.start()
+        service => service.start()
     )
 }
 
@@ -137,9 +130,7 @@ const createExtEnvironment = (context: vscode.ExtensionContext): ExtEnvironment 
     const env = {
         context: context,
         testController: initTestController(context),
-        targetInfoByFile: new Map<string, TargetByInfo>(),
-        buildNinjaFileName: cfg.buildNinjaFileName,
-        buildFolder: cfg.getBuildFolder
+        targetInfoByFile: new Map<string, TargetByInfo>()
     }
     initTestRun(env);
     return env;
@@ -166,7 +157,7 @@ const fireEventOnBuildFolderUpdate = (folder: string, callback: Sender<AnyEventO
 }
 
 const subscribeToBuildNinjaUpdates = (callback: Sender<AnyEventObject>, receive: Receiver<AnyEventObject>): R.Reader<ExtEnvironment, () => void> => env => {
-    const subscription = observeBuildNinja(env.buildNinjaFileName).subscribe(update => fireEventOnBuildNinjaUpdate(update, callback));
+    const subscription = observeBuildNinja(cfg.buildNinjaFileName).subscribe(update => fireEventOnBuildNinjaUpdate(update, callback));
     receive(event => {
         if (event.type === 'INVALID_BUILD_FOLDER') {
             subscription.unsubscribe();
@@ -195,7 +186,7 @@ const resetExtension = (): R.Reader<ExtEnvironment, void> => env => {
 const processBuildManifest = (): R.Reader<ExtEnvironment, void> => env => {
     logDebug(`Reading build manifest file.`);
     env.targetInfoByFile.clear();
-    for (let [file, targetInfo] of createTargetByFileMapping()) {
+    for (const [file, targetInfo] of createTargetByFileMapping()) {
         env.targetInfoByFile.set(file, targetInfo);
     }
 }
@@ -206,8 +197,8 @@ const showInvalidBuildFolderMessage = () => {
     showWarningMessage(misconfiguredMsg)();
 }
 
-const showBuildManifestMissingMessage = (): R.Reader<ExtEnvironment, void> => env => {
-    const noBuildManifestMessage = `GoogleTestRunner needs the ${env.buildNinjaFileName} file to work. Please run cmake configure at least once with your configured build folder ${env.buildFolder()}.`;
+const showBuildManifestMissingMessage = (): void => {
+    const noBuildManifestMessage = `GoogleTestRunner needs the ${cfg.buildNinjaFileName} file to work. Please run cmake configure at least once with your configured build folder ${cfg.getBuildFolder()}.`;
     logInfo(noBuildManifestMessage);
     showWarningMessage(noBuildManifestMessage)();
 }
