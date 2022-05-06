@@ -2,13 +2,12 @@ import * as vscode from 'vscode';
 import * as cfg from '../utils/configuration';
 import { startProcess } from '../utils/system';
 import { logDebug } from '../utils/logger';
-import { targetInfoByFile } from '../extension';
-import { getGTestLogFile, getJSONResultFile } from '../utils/utils';
+import { getGTestLogFile, getJSONResultFile, TargetByInfo } from '../utils/utils';
 import { Observable } from 'observable-fns';
 
-export function runTest(runParams: { rootItem: vscode.TestItem, leafItems: vscode.TestItem[] }) {
+export function runTest(runParams: { rootItem: vscode.TestItem, leafItems: vscode.TestItem[], targetInfoByFile: Map<string, TargetByInfo> }) {
     const rootItemUri = runParams.rootItem.uri!;
-    const targetFile = targetInfoByFile.get(rootItemUri.fsPath)?.targetFile;
+    const targetFile = runParams.targetInfoByFile.get(rootItemUri.fsPath)?.targetFile;
     const filter = createRunFilter(runParams.leafItems);
     const jsonResultFile = getJSONResultFile(runParams.rootItem.uri!).baseName;
     const verbosityLevel = cfg.gtestVerbosityLevel();

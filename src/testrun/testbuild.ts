@@ -4,12 +4,12 @@ import * as cfg from '../utils/configuration';
 import { startProcess } from '../utils/system';
 import { logInfo, logDebug } from '../utils/logger';
 import { RunEnvironment } from './testrun';
-import { targetInfoByFile } from '../extension';
+import { ExtEnvironment } from '../extension';
 import { Observable } from 'observable-fns';
 
 export function buildTests(runEnvironment: RunEnvironment) {
     return Observable.from(rootItems(runEnvironment)).flatMap(rootItem => {
-        const targetInfo = getTargetInfo(rootItem);
+        const targetInfo = getTargetInfo(rootItem, runEnvironment);
         return buildTest(targetInfo.name, rootItem);
     });
 }
@@ -26,9 +26,9 @@ function rootItems(runEnvironment: RunEnvironment) {
     return [...runEnvironment.leafItemsByRootItem.keys()];
 }
 
-function getTargetInfo(rootItem: vscode.TestItem) {
+function getTargetInfo(rootItem: vscode.TestItem, runEnvironment: RunEnvironment) {
     const uri = rootItem.uri!;
-    const targetInfo = targetInfoByFile.get(uri.fsPath)!;
+    const targetInfo = runEnvironment.targetInfoByFile.get(uri.fsPath)!;
     logDebug(`Found build target ${targetInfo.name} for ${uri}`);
     return targetInfo;
 }

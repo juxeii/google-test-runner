@@ -4,16 +4,16 @@ import * as cfg from './utils/configuration';
 import { logDebug, logError, logInfo } from './utils/logger';
 import { TargetByInfo, createTargetByFileMapping, doesFolderExist } from './utils/utils';
 import { pipe } from 'fp-ts/lib/function';
-import { createTestController } from './testrun/testrun';
+import { initTestRun } from './testrun/testrun';
 import { BuildNinjaUpdate, observeBuildFolderChange, observeBuildNinja } from './listener';
 import { createDocumentActor } from './documentactor';
 import { IO } from 'fp-ts/lib/IO';
 import { ActorRef, AnyEventObject, assign, createMachine, interpret, Receiver, send, Sender, spawn } from 'xstate';
 
-export let targetInfoByFile = new Map<string, TargetByInfo>();
 export type ExtEnvironment = {
     context: vscode.ExtensionContext;
     testController: vscode.TestController;
+    targetInfoByFile: Map<string, TargetByInfo>;
     buildNinjaFileName: string;
     buildFolder: () => string;
 }
@@ -33,9 +33,9 @@ const onValidBuildFolder = (context: GTestContext) => {
     resetExtension()(context.environment);
 }
 
-const onBuildPresent = () => {
+const onBuildPresent = (context: GTestContext) => {
     logDebug(`FSM: Enter build present.`);
-    processBuildManifest();
+    processBuildManifest()(context.environment);
 }
 
 const onBuildAbsent = (context: GTestContext) => {
@@ -75,7 +75,7 @@ const createGTestMachine = (environment: ExtEnvironment) => createMachine<GTestC
                 assign({
                     buildFolderObserver: () => spawn(subscribeToBuildFolderUpdates)
                 }), assign({
-                    documentActor: () => spawn((_, receiver) => createDocumentActor(environment.testController, receiver), 'documentActor')
+                    documentActor: () => spawn((_, receiver) => createDocumentActor(environment, receiver), 'documentActor')
                 })],
             on: {
                 VALID_BUILD_FOLDER: "validbuildfolder",
@@ -134,16 +134,19 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 const createExtEnvironment = (context: vscode.ExtensionContext): ExtEnvironment => {
-    return {
+    const env = {
         context: context,
         testController: initTestController(context),
+        targetInfoByFile: new Map<string, TargetByInfo>(),
         buildNinjaFileName: cfg.buildNinjaFileName,
         buildFolder: cfg.getBuildFolder
     }
+    initTestRun(env);
+    return env;
 }
 
 const initTestController = (context: vscode.ExtensionContext): vscode.TestController => {
-    const testController = createTestController();
+    const testController = vscode.tests.createTestController('GoogleTestController', 'GoogleTestController');
     context.subscriptions.push(testController);
     return testController;
 }
@@ -186,12 +189,15 @@ const fireEventOnBuildNinjaUpdate = (update: BuildNinjaUpdate, callback: Sender<
 
 const resetExtension = (): R.Reader<ExtEnvironment, void> => env => {
     logDebug(`Resetting extension`);
-    targetInfoByFile.clear();
+    env.targetInfoByFile.clear();
 }
 
-const processBuildManifest = (): void => {
+const processBuildManifest = (): R.Reader<ExtEnvironment, void> => env => {
     logDebug(`Reading build manifest file.`);
-    targetInfoByFile = createTargetByFileMapping();
+    env.targetInfoByFile.clear();
+    for (let [file, targetInfo] of createTargetByFileMapping()) {
+        env.targetInfoByFile.set(file, targetInfo);
+    }
 }
 
 const showInvalidBuildFolderMessage = () => {

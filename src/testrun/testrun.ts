@@ -5,41 +5,40 @@ import { buildTest, buildTests } from './testbuild';
 import { observeTestResult } from './testevaluation';
 import { createLeafItemsByRoot } from './testcontroller';
 import { runTest } from './testexecution';
-import { getGTestLogFile } from '../utils/utils';
-import { targetInfoByFile } from '../extension';
+import { getGTestLogFile, TargetByInfo } from '../utils/utils';
 import { loadSharedLibsOnDebug } from '../utils/configuration';
+import { ExtEnvironment } from '../extension';
 
 export type RunEnvironment = {
     testRun: vscode.TestRun;
     testController: vscode.TestController;
+    targetInfoByFile: Map<string, TargetByInfo>;
     runRequest: vscode.TestRunRequest;
     leafItemsByRootItem: Map<vscode.TestItem, vscode.TestItem[]>;
 }
 
-export function createTestController() {
-    const testController = vscode.tests.createTestController('GoogleTestController', 'GoogleTestController');
-    testController.createRunProfile('Run Tests', vscode.TestRunProfileKind.Run, createRunHandler(testController), true);
-    testController.createRunProfile('Debug Tests', vscode.TestRunProfileKind.Debug, createDebugHandler(testController), true);
-    return testController;
+export function initTestRun(extEnvironment: ExtEnvironment) {
+    extEnvironment.testController.createRunProfile('Run Tests', vscode.TestRunProfileKind.Run, createRunHandler(extEnvironment), true);
+    if (!vscode.extensions.getExtension('ms-vscode.cpptools')) {
+        logInfo('ms-vscode.cpptools extension is not installed. Test debugging is disabled.');
+    }
+    else {
+        extEnvironment.testController.createRunProfile('Debug Tests', vscode.TestRunProfileKind.Debug, createDebugHandler(extEnvironment), true);
+    }
 }
 
-function createDebugHandler(testController: vscode.TestController) {
+function createDebugHandler(env: ExtEnvironment) {
     return async function debugHandler(
         runRequest: vscode.TestRunRequest,
         token: vscode.CancellationToken
     ) {
-
-        if (!vscode.extensions.getExtension('ms-vscode.cpptools')) {
-            logInfo('Please install ms-vscode.cpptools extension in order to debug testcases!');
-            return;
-        }
         if (!runRequest.include || runRequest.include.length > 1) {
             logInfo('Only one testcase at a time is supported for debugging.');
             return;
         }
 
         const testItem = runRequest.include[0];
-        const targetName = targetInfoByFile.get(testItem.uri!.fsPath)!.name;
+        const targetName = env.targetInfoByFile.get(testItem.uri!.fsPath)!.name;
         buildTest(targetName, testItem).subscribe({
             next(rootItem) { logDebug(`Debug build finished.`) },
             error(err) { logError(`Debug build failed!`) },
@@ -48,7 +47,7 @@ function createDebugHandler(testController: vscode.TestController) {
 
         function debug() {
             printBlock('Debug session started.');
-            const targetFile = targetInfoByFile.get(testItem.uri!.fsPath)!.targetFile;
+            const targetFile = env.targetInfoByFile.get(testItem.uri!.fsPath)!.targetFile;
             const cwd = path.dirname(targetFile);
             const workspaceFolder = vscode.workspace.workspaceFolders![0];
             const testCaseName = testItem.label;
@@ -75,13 +74,13 @@ function createDebugHandler(testController: vscode.TestController) {
     }
 }
 
-function createRunHandler(testController: vscode.TestController) {
+function createRunHandler(env: ExtEnvironment) {
     return async function runHandler(
         runRequest: vscode.TestRunRequest,
         token: vscode.CancellationToken
     ) {
-        const testRun = startRun(testController, runRequest);
-        const runEnvironment = initializeRunEnvironment(testController, runRequest, testRun);
+        const testRun = startRun(env.testController, runRequest);
+        const runEnvironment = initializeRunEnvironment(env, runRequest, testRun);
 
         const testRunSubscription = buildTests(runEnvironment)
             .flatMap(rootItem => observeTestExecutation(rootItem, runEnvironment))
@@ -104,11 +103,11 @@ function createRunHandler(testController: vscode.TestController) {
 
 function observeTestExecutation(rootItem: vscode.TestItem, runEnvironment: RunEnvironment) {
     const filePath = rootItem.uri?.fsPath!;
-    const targetFile = targetInfoByFile.get(filePath)?.targetFile;
+    const targetFile = runEnvironment.targetInfoByFile.get(filePath)?.targetFile;
 
     logDebug(`Running test executable ${targetFile} ...`);
     const leafItems = runEnvironment.leafItemsByRootItem.get(rootItem)!;
-    return runTest({ rootItem: rootItem, leafItems: leafItems });
+    return runTest({ rootItem: rootItem, leafItems: leafItems, targetInfoByFile: runEnvironment.targetInfoByFile });
 }
 
 function startRun(testController: vscode.TestController, runRequest: vscode.TestRunRequest) {
@@ -134,11 +133,12 @@ function skipItemsOnCancel(runEnvironment: RunEnvironment) {
     }
 }
 
-function initializeRunEnvironment(testController: vscode.TestController, runRequest: vscode.TestRunRequest, testRun: vscode.TestRun) {
-    const leafItemsByRootItem = createLeafItemsByRoot(testController, runRequest);
+function initializeRunEnvironment(env: ExtEnvironment, runRequest: vscode.TestRunRequest, testRun: vscode.TestRun) {
+    const leafItemsByRootItem = createLeafItemsByRoot(env.testController, runRequest);
     const runEnvironment: RunEnvironment = {
         testRun: testRun,
-        testController: testController,
+        testController: env.testController,
+        targetInfoByFile: env.targetInfoByFile,
         runRequest: runRequest,
         leafItemsByRootItem: leafItemsByRootItem
     }

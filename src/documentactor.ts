@@ -2,17 +2,19 @@ import * as vscode from 'vscode';
 import { logDebug } from './utils/logger';
 import { discoverGTestMacros } from './parsing/macrodiscovery';
 import { discoverTestCasesFromMacros } from './parsing/testdiscovery';
-import { targetInfoByFile } from './extension';
 import { TestCase } from './types';
 import { observeDidChangeActiveEditor, observeDidCloseTextDocument, observeDidSaveTextDocument } from './listener';
 import { updateTestControllerFromDocument } from './testrun/testcontroller';
 import path = require('path');
 import { AnyEventObject, createMachine, interpret, InterpreterFrom, Receiver, Sender } from 'xstate';
 import * as R from 'fp-ts/Reader';
+import { ExtEnvironment } from './extension';
+import { TargetByInfo } from './utils/utils';
 
 type DocumentEnvironment = {
     testController: vscode.TestController;
     documentFsmByUri: Map<vscode.TextDocument, DocumentFsm>;
+    targetInfoByFile: Map<string, TargetByInfo>;
 }
 
 type FsmEnvironment = {
@@ -67,9 +69,9 @@ const createDocumentMachine = (environment: FsmEnvironment) => createMachine(
 );
 type DocumentFsm = InterpreterFrom<typeof createDocumentMachine>;
 
-export const createDocumentActor = (testController: vscode.TestController, receive: Receiver<AnyEventObject>): () => void => {
+export const createDocumentActor = (extEnvironment: ExtEnvironment, receive: Receiver<AnyEventObject>): () => void => {
     logDebug(`Creating document actor`);
-    const environment = createEnvironment(testController);
+    const environment = createEnvironment(extEnvironment);
     subscribeDocumentListeners()(environment);
 
     receive(event => {
@@ -96,10 +98,11 @@ const parseActiveDocument = (): R.Reader<DocumentEnvironment, void> => env => {
     }
 }
 
-const createEnvironment = (testController: vscode.TestController): DocumentEnvironment => {
+const createEnvironment = (extEnvironment: ExtEnvironment): DocumentEnvironment => {
     return {
-        testController: testController,
-        documentFsmByUri: new Map<vscode.TextDocument, DocumentFsm>()
+        testController: extEnvironment.testController,
+        documentFsmByUri: new Map<vscode.TextDocument, DocumentFsm>(),
+        targetInfoByFile: extEnvironment.targetInfoByFile
     }
 }
 
@@ -112,11 +115,11 @@ const resetDocumentEnvironment = (): R.Reader<DocumentEnvironment, void> => env 
 const syncDocumentUrisAfterBuildNinjaChange = (): R.Reader<DocumentEnvironment, void> => env => {
     logDebug(`Filtering documents build manifest change.`);
     env.documentFsmByUri.forEach((_, document) => {
-        if (!targetInfoByFile.has(document.uri.fsPath)) {
+        if (!env.targetInfoByFile.has(document.uri.fsPath)) {
             removeDocumentItems(document, env.testController);
         }
     });
-    env.documentFsmByUri = new Map([...env.documentFsmByUri].filter(([document, _]) => targetInfoByFile.has(document.uri.fsPath)));
+    env.documentFsmByUri = new Map([...env.documentFsmByUri].filter(([document, _]) => env.targetInfoByFile.has(document.uri.fsPath)));
 }
 
 const createDocumentFsm = (document: vscode.TextDocument): R.Reader<DocumentEnvironment, DocumentFsm> => env => {
@@ -142,14 +145,14 @@ const getDocumentFsm = (document: vscode.TextDocument): R.Reader<DocumentEnviron
 
 const onEditorSwitch = (editor: vscode.TextEditor): R.Reader<DocumentEnvironment, void> => env => {
     const document = editor.document;
-    if (!isInBuildManifest(document)) {
+    if (!isInBuildManifest(document)(env)) {
         return;
     }
     getDocumentFsm(document)(env);
 };
 
 const onDocumentSave = (document: vscode.TextDocument): R.Reader<DocumentEnvironment, void> => env => {
-    if (!isInBuildManifest(document)) {
+    if (!isInBuildManifest(document)(env)) {
         return;
     }
     getDocumentFsm(document)(env).send({ type: 'SAVED' });
@@ -181,6 +184,6 @@ const createTestCases = async (document: vscode.TextDocument): Promise<TestCase[
     return discoverTestCasesFromMacros(macros);
 };
 
-const isInBuildManifest = (document: vscode.TextDocument): boolean => {
-    return targetInfoByFile.has(document.uri.fsPath);
+const isInBuildManifest = (document: vscode.TextDocument): R.Reader<DocumentEnvironment, boolean> => env => {
+    return env.targetInfoByFile.has(document.uri.fsPath);
 };
