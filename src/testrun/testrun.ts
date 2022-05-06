@@ -88,7 +88,7 @@ function createRunHandler(testController: vscode.TestController) {
             .flatMap(rootItem => observeTestResult(rootItem, runEnvironment))
             .subscribe({
                 next(rootItem) { logDebug(`Test evaluation done for ${rootItem.uri}`) },
-                error(err) { onTestRunFinishedWithError(testRun) },
+                error(err: Error) { onTestRunFinishedWithError(testRun, err) },
                 complete() { onAllRunsCompleted(testRun, runEnvironment) }
             });
 
@@ -145,9 +145,9 @@ function initializeRunEnvironment(testController: vscode.TestController, runRequ
     return runEnvironment;
 }
 
-function onTestRunFinishedWithError(run: vscode.TestRun) {
+function onTestRunFinishedWithError(run: vscode.TestRun, err: Error) {
     run.end();
-    printBlock('Test run finished with errors.');
+    printBlock(`Test run finished with error(). Message: ${err.message}`);
 }
 
 function onAllRunsCompleted(run: vscode.TestRun, runEnvironment: RunEnvironment) {
