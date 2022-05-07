@@ -41,9 +41,9 @@ function parse(resultJSONUri: vscode.Uri) {
 
 function createTestReports(parsedJSON: any) {
     let testReportById = new Map<string, TestReport[]>();
-    mapJSONArray(parsedJSON.testsuites, testSuiteJSON => {
+    parsedJSON.testsuites.forEach((testSuiteJSON: { name: any; testsuite: any[]; }) => {
         logDebug(`Processing testSuiteJSON ${testSuiteJSON.name}`);
-        mapJSONArray(testSuiteJSON.testsuite, testCaseJSON => processTestCaseJSON(testCaseJSON, testReportById));
+        testSuiteJSON.testsuite.forEach(testCaseJSON => processTestCaseJSON(testCaseJSON, testReportById));
     });
     return testReportById;
 }
@@ -94,7 +94,7 @@ function failuresOfTestCaseJSON(testCaseJSON: any, parameter: any) {
 }
 
 function fillFailures(failuresJSON: Array<any>, paramName: string): TestFailure[] {
-    return mapJSONArray(failuresJSON, failureJSON => {
+    return failuresJSON.map(failureJSON => {
         const testFailure: TestFailure =
         {
             message: failureJSON.failure,
@@ -103,15 +103,6 @@ function fillFailures(failuresJSON: Array<any>, paramName: string): TestFailure[
         }
         return testFailure;
     });
-}
-
-function mapJSONArray<T>(jsonArray: Array<any>, handler: (item: any) => T) {
-    let resultArray: T[] = [];
-    for (let i = 0; i < jsonArray.length; i++) {
-        const mapResult = handler(jsonArray[i]);
-        resultArray.push(mapResult);
-    }
-    return resultArray;
 }
 
 function testCaseId(testcase: any) {
