@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { logInfo, logDebug, logError } from '../utils/logger';
+import { logInfo, logDebug, logError, outputChannel } from '../utils/logger';
 import { buildTest, buildTests } from './testbuild';
 import { observeTestResult } from './testevaluation';
 import { createLeafItemsByRoot } from './testcontroller';
@@ -114,6 +114,7 @@ function startRun(testController: vscode.TestController, runRequest: vscode.Test
     printBlock('Starting test run...');
     const testRun = testController.createTestRun(runRequest);
     showItemSpinners(testController, runRequest, testRun);
+    outputChannel.show(true);
     return testRun;
 }
 

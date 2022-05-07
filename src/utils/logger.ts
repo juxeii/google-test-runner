@@ -43,14 +43,14 @@ class OutputChannelTransport extends Transport {
     }
 };
 
-let outputChannel = vscode.window.createOutputChannel('GoogleTestRunner');
+export const outputChannel = vscode.window.createOutputChannel('GoogleTestRunner');
 
-let loggerImpl: winston.Logger = createLogger({
+const loggerImpl: winston.Logger = createLogger({
     levels: customizedLogLevels(),
     level: logLevel(),
     transports: [new OutputChannelTransport(outputChannel)],
     format: format.combine(
-        format.timestamp({ format: ()=>  new Date().toLocaleString('en-US', { hour12: false })}),
+        format.timestamp({ format: () => new Date().toLocaleString('en-US', { hour12: false }) }),
         format.printf(({ timestamp, level, message }) => `[${timestamp}] ${level.toUpperCase()}: ${message}`)
     ),
 });
