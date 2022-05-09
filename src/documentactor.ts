@@ -9,7 +9,7 @@ import path = require('path');
 import { AnyEventObject, createMachine, interpret, InterpreterFrom, Receiver, Sender } from 'xstate';
 import * as R from 'fp-ts/Reader';
 import { ExtEnvironment } from './extension';
-import { TargetByInfo } from './utils/utils';
+import { TargetByInfo } from './parsing/buildninja';
 
 type DocumentEnvironment = {
     testController: vscode.TestController;

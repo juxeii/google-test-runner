@@ -5,9 +5,10 @@ import { buildTest, buildTests } from './testbuild';
 import { observeTestResult } from './testevaluation';
 import { createLeafItemsByRoot } from './testcontroller';
 import { runTest } from './testexecution';
-import { getGTestLogFile, TargetByInfo } from '../utils/utils';
+import { getGTestLogFile } from '../utils/utils';
 import { loadSharedLibsOnDebug } from '../utils/configuration';
 import { ExtEnvironment } from '../extension';
+import { TargetByInfo } from '../parsing/buildninja';
 
 export type RunEnvironment = {
     testRun: vscode.TestRun;

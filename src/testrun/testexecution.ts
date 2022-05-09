@@ -2,8 +2,9 @@ import * as vscode from 'vscode';
 import * as cfg from '../utils/configuration';
 import { startProcess } from '../utils/system';
 import { logDebug } from '../utils/logger';
-import { getGTestLogFile, getJSONResultFile, TargetByInfo } from '../utils/utils';
+import { getGTestLogFile, getJSONResultFile } from '../utils/utils';
 import { Observable } from 'observable-fns';
+import { TargetByInfo } from '../parsing/buildninja';
 
 export function runTest(runParams: { rootItem: vscode.TestItem, leafItems: vscode.TestItem[], targetInfoByFile: Map<string, TargetByInfo> }) {
     const rootItemUri = runParams.rootItem.uri!;

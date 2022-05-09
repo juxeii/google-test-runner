@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { logDebug } from './utils/logger';
+import { logDebug } from '../utils/logger';
 import fs = require('fs');
 
 export type TestFailure =

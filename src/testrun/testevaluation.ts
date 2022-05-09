@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
-import * as rj from '../resultjson';
+import * as rj from '../parsing/resultjson';
 import { RunEnvironment } from './testrun';
 import { logInfo, logDebug, logError } from '../utils/logger';
 import { getJSONResultFile } from '../utils/utils';
 import { multicast, Observable } from 'observable-fns';
+import { createFailureMessage } from '../parsing/failure';
 
 export function observeTestResult(rootItem: vscode.TestItem, runEnvironment: RunEnvironment) {
     return multicast(new Observable<vscode.TestItem>(observer => {
@@ -58,12 +59,8 @@ function processPassedTestcase(run: vscode.TestRun, item: vscode.TestItem) {
 
 function processFailedTestcase(run: vscode.TestRun, item: vscode.TestItem, failure: rj.TestFailure) {
     logInfo(`Testcase ${item.id} failed.`);
-    let failureMessage = failure.message;
-    if (failure.param) {
-        failureMessage += '\n' + `Failure parameter: ${failure.param} `;
-    }
-    const failureMessageForDocument = createFailureMessageForDocument(item, failureMessage, failure);
-    run.failed(item, failureMessageForDocument);
+    const failureMessage = createFailureMessage(item, failure);
+    run.failed(item, failureMessage);
 }
 
 function createFailureMessageForDocument(item: vscode.TestItem, failureMessage: string, failure: rj.TestFailure) {
