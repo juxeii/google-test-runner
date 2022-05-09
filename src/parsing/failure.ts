@@ -10,35 +10,44 @@ const expectRegex = /Expected:/g;
 const valueExpectRegex = /Expected equality of these values:/g;
 const expectedRegex = /^\s+.+\n?(?:\s+Which is.*\n?)?/gm;
 
-const msgParamsForAssertTrueExpectation = (item: vscode.TestItem, failureMessage: string, failure: rj.TestFailure): DiffMessageParams => {
+const msgParamsForAssertTrueExpectation = (item: vscode.TestItem, failureMessage: string, failure: rj.TestFailure): Option<DiffMessageParams> => {
+    if (failureMessage.match(assertTrueFalseRegex) === null) {
+        return none;
+    }
     const splitted = failureMessage.split('\n');
     const expectedTerm = splitted[1].trim();
     const actual = splitted[2].replace('Actual:', '').trim();
     const expected = splitted[3].replace('Expected:', '').trim();
-    return { item: item, expectedTerm: expectedTerm, expected: expected, actual: actual, lineNo: failure.lineNo };
+    return some({ item: item, expectedTerm: expectedTerm, expected: expected, actual: actual, lineNo: failure.lineNo });
 }
 
-const msgParamsForExpectation = (item: vscode.TestItem, failureMessage: string, failure: rj.TestFailure): DiffMessageParams => {
+const msgParamsForExpectation = (item: vscode.TestItem, failureMessage: string, failure: rj.TestFailure): Option<DiffMessageParams> => {
+    if (failureMessage.match(expectRegex) === null) {
+        return none;
+    }
     const splitted = failureMessage.split('\n');
     const expectedTerm = splitted[1].trim();
     const subSplit = expectedTerm.split(', actual:');
     const expected = subSplit[0].replace('Expected:', '').trim();
     const actual = subSplit[1].trim();
-    return { item: item, expectedTerm: expectedTerm, expected: expected, actual: actual, lineNo: failure.lineNo };
+    return some({ item: item, expectedTerm: expectedTerm, expected: expected, actual: actual, lineNo: failure.lineNo });
 }
 
-const msgParamsForValueExpectation = (item: vscode.TestItem, failureMessage: string, failure: rj.TestFailure): DiffMessageParams => {
+const msgParamsForValueExpectation = (item: vscode.TestItem, failureMessage: string, failure: rj.TestFailure): Option<DiffMessageParams> => {
+    if (failureMessage.match(valueExpectRegex) === null) {
+        return none;
+    }
     const m = [...failureMessage.matchAll(expectedRegex)];
     const expected = removeNewLineAndTrim(m[0].toString())
     const actual = removeNewLineAndTrim(m[1].toString())
-    return { item: item, expectedTerm: 'Expected equality of these values:', expected: expected, actual: actual, lineNo: failure.lineNo };
+    return some({ item: item, expectedTerm: 'Expected equality of these values:', expected: expected, actual: actual, lineNo: failure.lineNo });
 }
 
-const diffMsgParamsByRegex = new Map<RegExp, (item: vscode.TestItem, failureMessage: string, failure: rj.TestFailure) => DiffMessageParams>([
-    [assertTrueFalseRegex, msgParamsForAssertTrueExpectation],
-    [valueExpectRegex, msgParamsForValueExpectation],
-    [expectRegex, msgParamsForExpectation],
-]);
+const msgParamsCreators = new Array<(item: vscode.TestItem, failureMessage: string, failure: rj.TestFailure) => Option<DiffMessageParams>>(
+    msgParamsForAssertTrueExpectation,
+    msgParamsForValueExpectation,
+    msgParamsForExpectation
+);
 
 type DiffMessageParams = {
     item: vscode.TestItem;
@@ -63,10 +72,13 @@ export const createFailureMessage = (item: vscode.TestItem, failure: rj.TestFail
 }
 
 const maybeDiffMessage = (item: vscode.TestItem, failureMessage: string, failure: rj.TestFailure): Option<vscode.TestMessage> => {
-    for (let [regex, msgCreator] of diffMsgParamsByRegex) {
-        if (failureMessage.match(regex) != null) {
-            const msgParams = msgCreator(item, failureMessage, failure);
-            return some(createFailureMessageWithDiff(msgParams));
+    for (let msgParamsCreator of msgParamsCreators) {
+        const maybeMsg = msgParamsCreator(item, failureMessage, failure);
+        if (O.isSome(maybeMsg)) {
+            return pipe(
+                maybeMsg,
+                O.map(msg => createFailureMessageWithDiff(msg))
+            )
         }
     }
     return none;

@@ -12,7 +12,6 @@ export function observeTestResult(rootItem: vscode.TestItem, runEnvironment: Run
         if (hasEvaluatedWithoutErrors(rootItem, runEnvironment, testReportById)) {
             observer.next(rootItem);
             observer.complete();
-
         }
         else {
             observer.error(1)
