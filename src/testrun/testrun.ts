@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { logInfo, logDebug, logError, outputChannel } from '../utils/logger';
+import { logInfo, logDebug, logError, outputChannel, outputChannelGT } from '../utils/logger';
 import { buildTest, buildTests } from './testbuild';
 import { observeTestResult } from './testevaluation';
 import { createLeafItemsByRoot } from './testcontroller';
@@ -115,7 +115,6 @@ function startRun(testController: vscode.TestController, runRequest: vscode.Test
     printBlock('Starting test run...');
     const testRun = testController.createTestRun(runRequest);
     showItemSpinners(testController, runRequest, testRun);
-    outputChannel.show(true);
     return testRun;
 }
 
@@ -162,6 +161,10 @@ function showLogFiles(runEnvironment: RunEnvironment) {
     [...runEnvironment.leafItemsByRootItem.keys()].forEach(rootItem => {
         const gTestLogFile = getGTestLogFile(rootItem.uri!).uri;
         logInfo(`Log file for ${rootItem.id}: ${gTestLogFile}`);
+        vscode.workspace.openTextDocument(gTestLogFile).then((document) => {
+            outputChannelGT.show(true);
+            outputChannelGT.appendLine(document.getText());
+        });
     });
 }
 

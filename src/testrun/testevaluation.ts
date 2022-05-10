@@ -61,10 +61,3 @@ function processFailedTestcase(run: vscode.TestRun, item: vscode.TestItem, failu
     const failureMessage = createFailureMessage(item, failure);
     run.failed(item, failureMessage);
 }
-
-function createFailureMessageForDocument(item: vscode.TestItem, failureMessage: string, failure: rj.TestFailure) {
-    const message = new vscode.TestMessage(failureMessage.substring(failureMessage.indexOf("\n") + 1));
-    const lineNo = failure.lineNo;
-    message.location = new vscode.Location(item.uri!, new vscode.Position(lineNo, 0));
-    return message;
-}

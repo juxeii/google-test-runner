@@ -44,6 +44,7 @@ class OutputChannelTransport extends Transport {
 };
 
 export const outputChannel = vscode.window.createOutputChannel('GoogleTestRunner');
+export const outputChannelGT = vscode.window.createOutputChannel('GoogleTest');
 
 const loggerImpl: winston.Logger = createLogger({
     levels: customizedLogLevels(),
