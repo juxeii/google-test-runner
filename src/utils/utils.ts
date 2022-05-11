@@ -35,3 +35,7 @@ export function createBuildFolderUriForFilName(fileName: string) {
 export const doesFolderExist = (folder: string): boolean => {
     return fs.existsSync(folder);
 }
+
+export const getFileContents = (file: string): string => {
+    return fs.readFileSync(file).toString();
+}

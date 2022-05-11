@@ -5,7 +5,7 @@ import { buildTest, buildTests } from './testbuild';
 import { observeTestResult } from './testevaluation';
 import { createLeafItemsByRoot } from './testcontroller';
 import { runTest } from './testexecution';
-import { getGTestLogFile } from '../utils/utils';
+import { getFileContents, getGTestLogFile } from '../utils/utils';
 import { loadSharedLibsOnDebug } from '../utils/configuration';
 import { ExtEnvironment } from '../extension';
 import { TargetByInfo } from '../parsing/buildninja';
@@ -161,10 +161,12 @@ function showLogFiles(runEnvironment: RunEnvironment) {
     [...runEnvironment.leafItemsByRootItem.keys()].forEach(rootItem => {
         const gTestLogFile = getGTestLogFile(rootItem.uri!).uri;
         logInfo(`Log file for ${rootItem.id}: ${gTestLogFile}`);
-        vscode.workspace.openTextDocument(gTestLogFile).then((document) => {
-            outputChannelGT.show(true);
-            outputChannelGT.appendLine(document.getText());
-        });
+
+        outputChannelGT.appendLine('***********************************************');
+        const logFileText = getFileContents(gTestLogFile.fsPath);
+        outputChannelGT.show(true);
+        outputChannelGT.appendLine(logFileText);
+        outputChannelGT.appendLine('***********************************************');
     });
 }
 
