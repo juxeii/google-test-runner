@@ -6,7 +6,7 @@ import { TestCase } from './types';
 import { observeDidChangeActiveEditor, observeDidCloseTextDocument, observeDidSaveTextDocument } from './listener';
 import { updateTestControllerFromDocument } from './testrun/testcontroller';
 import path = require('path');
-import { AnyEventObject, createMachine, interpret, InterpreterFrom, Receiver, Sender } from 'xstate';
+import { AnyEventObject, createMachine, interpret, InterpreterFrom, Sender } from 'xstate';
 import * as R from 'fp-ts/Reader';
 import { ExtEnvironment } from './extension';
 import { TargetByInfo } from './parsing/buildninja';
@@ -22,19 +22,6 @@ type FsmEnvironment = {
     document: vscode.TextDocument;
 }
 
-const onStart = () => {
-    logDebug(`Document FSM: Enter start.`);
-}
-
-const onTestsPresent = () => {
-    logDebug(`Document FSM: Enter onTestsPresent.`);
-}
-
-const onTestsAbsent = (environment: FsmEnvironment) => {
-    logDebug(`Document FSM: Enter onTestsAbsent.`);
-    removeDocumentItems(environment.document, environment.testController);
-}
-
 const createDocumentMachine = (environment: FsmEnvironment) => createMachine(
     {
         id: "documentfsm",
@@ -46,42 +33,49 @@ const createDocumentMachine = (environment: FsmEnvironment) => createMachine(
                     id: 'parseDocument',
                     src: () => (callback) => parseDocument(callback)(environment)
                 },
-                onEntry: onStart,
+                onEntry: ['onStart'],
                 on: {
                     PARSED_TESTS: "onTestsPresent",
                     PARSED_NO_TESTS: "onTestsAbsent"
                 },
             },
             onTestsPresent: {
-                onEntry: onTestsPresent,
+                onEntry: ['onTestsPresent'],
                 on: {
                     SAVED: "start"
                 },
             },
             onTestsAbsent: {
-                onEntry: onTestsAbsent,
+                onEntry: ['onTestsAbsent'],
                 on: {
                     SAVED: "start"
                 }
+            }
+        }
+    },
+    {
+        actions: {
+            onStart: () => logDebug(`Document FSM: Enter start.`),
+            onTestsPresent: () => logDebug(`Document FSM: Enter onTestsPresent.`),
+            onTestsAbsent: () => {
+                logDebug(`Document FSM: Enter onTestsAbsent.`);
+                removeDocumentItems(environment.document, environment.testController);
             }
         }
     }
 );
 type DocumentFsm = InterpreterFrom<typeof createDocumentMachine>;
 
-export const createDocumentActor = (extEnvironment: ExtEnvironment, receive: Receiver<AnyEventObject>): () => void => {
-    logDebug(`Creating document actor`);
+export const createDocumentController = (extEnvironment: ExtEnvironment, onSync: (handler: () => void) => void): () => void => {
+    logDebug(`Creating document controller`);
     const environment = createEnvironment(extEnvironment);
     subscribeDocumentListeners()(environment);
 
-    receive(event => {
-        if (event.type === 'RESYNC') {
-            logDebug(`Document actor received RESYNC`);
-            syncDocumentUrisAfterBuildNinjaChange()(environment);
-            parseActiveDocument()(environment);
-        }
+    onSync(() => {
+        logDebug(`Document actor received RESYNC`);
+        syncDocumentUrisAfterBuildNinjaChange()(environment);
+        parseActiveDocument()(environment);
     });
-
     return () => resetDocumentEnvironment()(environment);
 }
 

@@ -18,7 +18,7 @@ export type RunEnvironment = {
     leafItemsByRootItem: Map<vscode.TestItem, vscode.TestItem[]>;
 }
 
-export function initTestRun(extEnvironment: ExtEnvironment) {
+export function initRunProfiles(extEnvironment: ExtEnvironment) {
     extEnvironment.testController.createRunProfile('Run Tests', vscode.TestRunProfileKind.Run, createRunHandler(extEnvironment), true);
     if (!vscode.extensions.getExtension('ms-vscode.cpptools')) {
         logInfo('ms-vscode.cpptools extension is not installed. Test debugging is disabled.');

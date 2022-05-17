@@ -1,15 +1,65 @@
 import * as vscode from 'vscode';
-import { logDebug, logInfo } from './utils/logger';
+import { logDebug, logError, logInfo } from './utils/logger';
 import { map, Option } from 'fp-ts/lib/Option';
 import { pipe } from 'fp-ts/lib/function';
 import * as cfg from './utils/configuration';
-import { multicast, Observable } from 'observable-fns';
+import { multicast, Observable, Subscription, SubscriptionObserver } from 'observable-fns';
+import { createTargetByFileMapping, TargetByInfo } from './parsing/buildninja';
+import { doesFolderExist } from './utils/utils';
+import { IO } from 'fp-ts/lib/IO';
 
 export const enum BuildNinjaUpdate {
     CREATED,
     CHANGED,
     DELETED
 };
+
+export const observeTargetInfoUpdates = (): Observable<Map<string, TargetByInfo>> => {
+    return multicast(new Observable<Map<string, TargetByInfo>>(observer => {
+        let targetInfoSubscription: Subscription<BuildNinjaUpdate>;
+        observeBuildFolderChange().subscribe(folder => {
+            if (!doesFolderExist(folder)) {
+                showInvalidBuildFolderMessage();
+            }
+
+            if (targetInfoSubscription) {
+                targetInfoSubscription.unsubscribe();
+            }
+            targetInfoSubscription = emitTargetInfo(observer);
+        });
+
+        return () => {
+            logDebug(`Unsubscribing from build folder updates.`);
+            targetInfoSubscription.unsubscribe();
+        };
+    }));
+};
+
+const emitTargetInfo = (observer: SubscriptionObserver<Map<string, TargetByInfo>>): Subscription<BuildNinjaUpdate> => {
+    return observeBuildNinja(cfg.buildNinjaFileName).subscribe(update => {
+        if (update === BuildNinjaUpdate.DELETED) {
+            showBuildManifestMissingMessage();
+            observer.next(new Map<string, TargetByInfo>())
+        }
+        else {
+            observer.next(createTargetByFileMapping())
+        }
+    });
+}
+
+const showInvalidBuildFolderMessage = () => {
+    const misconfiguredMsg = `The provided build folder ${cfg.getBuildFolder()} does not exist. Please change to an existing build folder via settings menu.`;
+    logError(misconfiguredMsg);
+    showWarningMessage(misconfiguredMsg)();
+}
+
+const showBuildManifestMissingMessage = (): void => {
+    const noBuildManifestMessage = `GoogleTestRunner needs the ${cfg.buildNinjaFileName} file to work. Please run cmake configure at least once with your configured build folder ${cfg.getBuildFolder()}.`;
+    logInfo(noBuildManifestMessage);
+    showWarningMessage(noBuildManifestMessage)();
+}
+
+const showWarningMessage = (message: string): IO<void> => () => vscode.window.showWarningMessage(message)
 
 export const observeBuildFolderChange = (): Observable<string> => {
     return multicast(new Observable<string>(observer => {
