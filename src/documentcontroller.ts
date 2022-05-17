@@ -3,7 +3,7 @@ import { logDebug } from './utils/logger';
 import { discoverGTestMacros } from './parsing/macrodiscovery';
 import { discoverTestCasesFromMacros } from './parsing/testdiscovery';
 import { TestCase } from './types';
-import { observeDidChangeActiveEditor, observeDidCloseTextDocument, observeDidSaveTextDocument } from './listener';
+import { observeDidChangeActiveEditor, observeDidCloseTextDocument, observeDidSaveTextDocument, observeTargetInfoUpdates } from './listener';
 import { updateTestControllerFromDocument } from './testrun/testcontroller';
 import path = require('path');
 import { AnyEventObject, createMachine, interpret, InterpreterFrom, Sender } from 'xstate';
@@ -66,17 +66,20 @@ const createDocumentMachine = (environment: FsmEnvironment) => createMachine(
 );
 type DocumentFsm = InterpreterFrom<typeof createDocumentMachine>;
 
-export const createDocumentController = (extEnvironment: ExtEnvironment, onSync: (handler: () => void) => void): () => void => {
+export const initDocumentController = (extEnvironment: ExtEnvironment): void => {
     logDebug(`Creating document controller`);
     const environment = createEnvironment(extEnvironment);
     subscribeDocumentListeners()(environment);
 
-    onSync(() => {
-        logDebug(`Document actor received RESYNC`);
+    observeTargetInfoUpdates().subscribe(targetByFileMapping => {
+        extEnvironment.targetInfoByFile.clear();
+        for (const [file, targetInfo] of targetByFileMapping) {
+            extEnvironment.targetInfoByFile.set(file, targetInfo);
+        }
+        logDebug(`Resync documents on build manifest change.`);
         syncDocumentUrisAfterBuildNinjaChange()(environment);
         parseActiveDocument()(environment);
     });
-    return () => resetDocumentEnvironment()(environment);
 }
 
 const subscribeDocumentListeners = (): R.Reader<DocumentEnvironment, void> => environment => {
@@ -98,12 +101,6 @@ const createEnvironment = (extEnvironment: ExtEnvironment): DocumentEnvironment 
         documentFsmByUri: new Map<vscode.TextDocument, DocumentFsm>(),
         targetInfoByFile: extEnvironment.targetInfoByFile
     }
-}
-
-const resetDocumentEnvironment = (): R.Reader<DocumentEnvironment, void> => env => {
-    logDebug(`Called reset on document controller`);
-    env.documentFsmByUri.clear();
-    env.testController.items.replace([]);
 }
 
 const syncDocumentUrisAfterBuildNinjaChange = (): R.Reader<DocumentEnvironment, void> => env => {
