@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { logInfo, logDebug, logError, outputChannel, outputChannelGT } from '../utils/logger';
+import { logInfo, logDebug, logError, outputChannelGT } from '../utils/logger';
 import { buildTest, buildTests } from './testbuild';
 import { observeTestResult } from './testevaluation';
 import { createLeafItemsByRoot } from './testcontroller';
@@ -84,7 +84,7 @@ function createRunHandler(env: ExtEnvironment) {
         const runEnvironment = initializeRunEnvironment(env, runRequest, testRun);
 
         const testRunSubscription = buildTests(runEnvironment)
-            .flatMap(rootItem => observeTestExecutation(rootItem, runEnvironment))
+            .flatMap(rootItem => observeTestExecution(rootItem, runEnvironment))
             .flatMap(rootItem => observeTestResult(rootItem, runEnvironment))
             .subscribe({
                 next(rootItem) { logDebug(`Test evaluation done for ${rootItem.uri}`) },
@@ -102,7 +102,7 @@ function createRunHandler(env: ExtEnvironment) {
     }
 }
 
-function observeTestExecutation(rootItem: vscode.TestItem, runEnvironment: RunEnvironment) {
+function observeTestExecution(rootItem: vscode.TestItem, runEnvironment: RunEnvironment) {
     const filePath = rootItem.uri?.fsPath!;
     const targetFile = runEnvironment.targetInfoByFile.get(filePath)?.targetFile;
 

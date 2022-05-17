@@ -2,13 +2,34 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { logDebug, logError } from '../utils/logger';
 import { TestCase } from '../types';
+import { ExtEnvironment } from '../extension';
+import { initRunProfiles } from './testrun';
+import { observeTestCasesUpdates, TestCasesUpdate } from '../documentcontroller';
 
-export function updateTestControllerFromDocument(document: vscode.TextDocument, testController: vscode.TestController, testCases: TestCase[]) {
-    const rootItemId = path.parse(document.uri.path).base;
-    const rootItem = addFixtureItem(testController, rootItemId, testController.items, document);
-    const fixtures = detectFixtures(testCases);
+export function initTestController(environment: ExtEnvironment) {
+    initRunProfiles(environment);
+    observeTestCasesUpdates(environment).subscribe(testCasesUpdate => {
+        if (testCasesUpdate.testCases.length === 0) {
+            removeDocumentItems(testCasesUpdate.document, environment);
+        }
+        else {
+            updateTestControllerFromDocument(testCasesUpdate, environment.testController);
+        }
+    });
+}
 
-    fixtures.forEach((fixtureTestCases, fixtureId) => processFixture(fixtureTestCases, fixtureId, testController, rootItem, document));
+export function removeDocumentItems(document: vscode.TextDocument, environment: ExtEnvironment) {
+    const fileName = path.basename(document.uri.fsPath);
+    environment.testController.items.delete(fileName);
+}
+
+
+function updateTestControllerFromDocument(testCasesUpdate: TestCasesUpdate, testController: vscode.TestController) {
+    const rootItemId = path.parse(testCasesUpdate.document.uri.path).base;
+    const rootItem = addFixtureItem(testController, rootItemId, testController.items, testCasesUpdate.document);
+    const fixtures = detectFixtures(testCasesUpdate.testCases);
+
+    fixtures.forEach((fixtureTestCases, fixtureId) => processFixture(fixtureTestCases, fixtureId, testController, rootItem, testCasesUpdate.document));
 }
 
 function addFixtureItem(testController: vscode.TestController, fixtureId: string, parent: vscode.TestItemCollection, document: vscode.TextDocument) {
@@ -68,15 +89,15 @@ function addTestCaseToFixture(testCase: TestCase, testCasesByFixture: Map<string
 }
 
 export function createLeafItemsByRoot(testController: vscode.TestController, request: vscode.TestRunRequest): Map<vscode.TestItem, vscode.TestItem[]> {
-    let roots = rootItems(testController, request);
-    let leafItemsByRootItem = new Map<vscode.TestItem, vscode.TestItem[]>();
+    const roots = rootItems(testController, request);
+    const leafItemsByRootItem = new Map<vscode.TestItem, vscode.TestItem[]>();
     roots.forEach(item => leafItemsByRootItem.set(item, []));
     assignLeafItems(testController, request, leafItemsByRootItem);
     return leafItemsByRootItem;
 }
 
 function rootItems(testController: vscode.TestController, request: vscode.TestRunRequest) {
-    let roots = new Set<vscode.TestItem>();
+    const roots = new Set<vscode.TestItem>();
     if (request.include) {
         request.include.forEach(item => roots.add(getRoot(item)));
     }

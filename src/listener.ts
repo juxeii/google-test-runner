@@ -12,7 +12,36 @@ export const enum BuildNinjaUpdate {
     CREATED,
     CHANGED,
     DELETED
-};
+}
+
+export const enum DocumentUpdate {
+    SAVED,
+    CLOSED,
+    SWITCHED_ACTIVE
+}
+
+export type DocumentUpdateInfo = {
+    document: vscode.TextDocument;
+    updateType: DocumentUpdate;
+}
+
+export const observeDocumentUpdates = (): Observable<DocumentUpdateInfo> => {
+    return multicast(new Observable<DocumentUpdateInfo>(observer => {
+        const changeSub = observeDidChangeActiveEditor().subscribe(editor => observer.next({ document: editor.document, updateType: DocumentUpdate.SWITCHED_ACTIVE }));
+        const saveSub = observeDidSaveTextDocument().subscribe(document => observer.next({ document: document, updateType: DocumentUpdate.SAVED }));
+        const closeSub = observeDidCloseTextDocument().subscribe(document => observer.next({ document: document, updateType: DocumentUpdate.CLOSED }));
+
+        const editor = vscode.window.activeTextEditor;
+        if (editor) {
+            observer.next({ document: editor.document, updateType: DocumentUpdate.SWITCHED_ACTIVE });
+        }
+        return () => {
+            changeSub.unsubscribe();
+            saveSub.unsubscribe();
+            closeSub.unsubscribe();
+        };
+    }));
+}
 
 export const observeTargetInfoUpdates = (): Observable<Map<string, TargetByInfo>> => {
     return multicast(new Observable<Map<string, TargetByInfo>>(observer => {
@@ -33,7 +62,7 @@ export const observeTargetInfoUpdates = (): Observable<Map<string, TargetByInfo>
             targetInfoSubscription.unsubscribe();
         };
     }));
-};
+}
 
 const emitTargetInfo = (observer: SubscriptionObserver<Map<string, TargetByInfo>>): Subscription<BuildNinjaUpdate> => {
     return observeBuildNinja(cfg.buildNinjaFileName).subscribe(update => {
@@ -61,7 +90,7 @@ const showBuildManifestMissingMessage = (): void => {
 
 const showWarningMessage = (message: string): IO<void> => () => vscode.window.showWarningMessage(message)
 
-export const observeBuildFolderChange = (): Observable<string> => {
+const observeBuildFolderChange = (): Observable<string> => {
     return multicast(new Observable<string>(observer => {
         const configurationListener = vscode.workspace.onDidChangeConfiguration(event => {
             if (cfg.hasBuildFolderChanged(event)) {

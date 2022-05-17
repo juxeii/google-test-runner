@@ -1,178 +1,45 @@
 import * as vscode from 'vscode';
+import * as R from 'fp-ts/Reader';
 import { logDebug } from './utils/logger';
 import { discoverGTestMacros } from './parsing/macrodiscovery';
 import { discoverTestCasesFromMacros } from './parsing/testdiscovery';
 import { TestCase } from './types';
-import { observeDidChangeActiveEditor, observeDidCloseTextDocument, observeDidSaveTextDocument, observeTargetInfoUpdates } from './listener';
-import { updateTestControllerFromDocument } from './testrun/testcontroller';
-import path = require('path');
-import { AnyEventObject, createMachine, interpret, InterpreterFrom, Sender } from 'xstate';
-import * as R from 'fp-ts/Reader';
+import { DocumentUpdate, observeDocumentUpdates } from './listener';
 import { ExtEnvironment } from './extension';
-import { TargetByInfo } from './parsing/buildninja';
+import { Observable } from 'observable-fns';
 
-type DocumentEnvironment = {
-    testController: vscode.TestController;
-    documentFsmByUri: Map<vscode.TextDocument, DocumentFsm>;
-    targetInfoByFile: Map<string, TargetByInfo>;
-}
-
-type FsmEnvironment = {
-    testController: vscode.TestController;
+export type TestCasesUpdate = {
     document: vscode.TextDocument;
+    testCases: TestCase[];
 }
 
-const createDocumentMachine = (environment: FsmEnvironment) => createMachine(
-    {
-        id: "documentfsm",
-        initial: "start",
-        context: environment,
-        states: {
-            start: {
-                invoke: {
-                    id: 'parseDocument',
-                    src: () => (callback) => parseDocument(callback)(environment)
-                },
-                onEntry: ['onStart'],
-                on: {
-                    PARSED_TESTS: "onTestsPresent",
-                    PARSED_NO_TESTS: "onTestsAbsent"
-                },
-            },
-            onTestsPresent: {
-                onEntry: ['onTestsPresent'],
-                on: {
-                    SAVED: "start"
-                },
-            },
-            onTestsAbsent: {
-                onEntry: ['onTestsAbsent'],
-                on: {
-                    SAVED: "start"
-                }
-            }
-        }
-    },
-    {
-        actions: {
-            onStart: () => logDebug(`Document FSM: Enter start.`),
-            onTestsPresent: () => logDebug(`Document FSM: Enter onTestsPresent.`),
-            onTestsAbsent: () => {
-                logDebug(`Document FSM: Enter onTestsAbsent.`);
-                removeDocumentItems(environment.document, environment.testController);
-            }
-        }
-    }
-);
-type DocumentFsm = InterpreterFrom<typeof createDocumentMachine>;
-
-export const initDocumentController = (extEnvironment: ExtEnvironment): void => {
+export const observeTestCasesUpdates = (environment: ExtEnvironment): Observable<TestCasesUpdate> => {
     logDebug(`Creating document controller`);
-    const environment = createEnvironment(extEnvironment);
-    subscribeDocumentListeners()(environment);
 
-    observeTargetInfoUpdates().subscribe(targetByFileMapping => {
-        extEnvironment.targetInfoByFile.clear();
-        for (const [file, targetInfo] of targetByFileMapping) {
-            extEnvironment.targetInfoByFile.set(file, targetInfo);
-        }
-        logDebug(`Resync documents on build manifest change.`);
-        syncDocumentUrisAfterBuildNinjaChange()(environment);
-        parseActiveDocument()(environment);
-    });
+    const documentObserver = observeDocumentUpdates()
+        .filter(updateInfo => isInBuildManifest(updateInfo.document)(environment))
+        .filter(updateInfo => !(updateInfo.updateType === DocumentUpdate.SWITCHED_ACTIVE && environment.parsedDocuments.has(updateInfo.document)))
+        .map(updateInfo => {
+            const document = updateInfo.document;
+            if (updateInfo.updateType === DocumentUpdate.SAVED || updateInfo.updateType === DocumentUpdate.SWITCHED_ACTIVE) {
+                const testCases = createTestCases(document);
+                environment.parsedDocuments.add(document);
+                return { document: document, testCases: testCases };
+
+            }
+            else {
+                environment.parsedDocuments.delete(document);
+                return { document: document, testCases: [] };
+            }
+        });
+    return documentObserver;
 }
 
-const subscribeDocumentListeners = (): R.Reader<DocumentEnvironment, void> => environment => {
-    observeDidChangeActiveEditor().subscribe(editor => onEditorSwitch(editor)(environment));
-    observeDidSaveTextDocument().subscribe(document => onDocumentSave(document)(environment));
-    observeDidCloseTextDocument().subscribe(document => onDocumentClose(document)(environment));
-}
-
-const parseActiveDocument = (): R.Reader<DocumentEnvironment, void> => env => {
-    const editor = vscode.window.activeTextEditor;
-    if (editor) {
-        onEditorSwitch(editor)(env);
-    }
-}
-
-const createEnvironment = (extEnvironment: ExtEnvironment): DocumentEnvironment => {
-    return {
-        testController: extEnvironment.testController,
-        documentFsmByUri: new Map<vscode.TextDocument, DocumentFsm>(),
-        targetInfoByFile: extEnvironment.targetInfoByFile
-    }
-}
-
-const syncDocumentUrisAfterBuildNinjaChange = (): R.Reader<DocumentEnvironment, void> => env => {
-    logDebug(`Filtering documents build manifest change.`);
-    env.documentFsmByUri.forEach((_, document) => {
-        if (!env.targetInfoByFile.has(document.uri.fsPath)) {
-            removeDocumentItems(document, env.testController);
-        }
-    });
-    env.documentFsmByUri = new Map([...env.documentFsmByUri].filter(([document, _]) => env.targetInfoByFile.has(document.uri.fsPath)));
-}
-
-const createDocumentFsm = (document: vscode.TextDocument): R.Reader<DocumentEnvironment, DocumentFsm> => env => {
-    const fsmEnvironment: FsmEnvironment = {
-        testController: env.testController,
-        document: document
-    }
-    const documentMachine = createDocumentMachine(fsmEnvironment);
-    const fsm = interpret(documentMachine);
-    fsm.start();
-    return fsm;
-}
-
-const getDocumentFsm = (document: vscode.TextDocument): R.Reader<DocumentEnvironment, DocumentFsm> => env => {
-    const fsm = env.documentFsmByUri.get(document);
-    if (fsm) {
-        return fsm;
-    }
-    const newFsm = createDocumentFsm(document)(env);
-    env.documentFsmByUri.set(document, newFsm);
-    return newFsm;
-}
-
-const onEditorSwitch = (editor: vscode.TextEditor): R.Reader<DocumentEnvironment, void> => env => {
-    const document = editor.document;
-    if (isInBuildManifest(document)(env)) {
-        getDocumentFsm(document)(env);
-    }
-};
-
-const onDocumentSave = (document: vscode.TextDocument): R.Reader<DocumentEnvironment, void> => env => {
-    if (isInBuildManifest(document)(env)) {
-        getDocumentFsm(document)(env).send({ type: 'SAVED' });
-    }
-};
-
-const onDocumentClose = (document: vscode.TextDocument): R.Reader<DocumentEnvironment, void> => env => {
-    env.documentFsmByUri.delete(document);
-    removeDocumentItems(document, env.testController);
-};
-
-const removeDocumentItems = (document: vscode.TextDocument, testController: vscode.TestController): void => {
-    const fileName = path.basename(document.uri.fsPath);
-    testController.items.delete(fileName);
-}
-
-const parseDocument = (callback: Sender<AnyEventObject>): R.Reader<FsmEnvironment, void> => async env => {
-    const testCases = await createTestCases(env.document);
-    if (testCases.length < 1) {
-        callback({ type: 'PARSED_NO_TESTS' });
-    }
-    else {
-        updateTestControllerFromDocument(env.document, env.testController, testCases);
-        callback({ type: 'PARSED_TESTS' });
-    }
-}
-
-const createTestCases = async (document: vscode.TextDocument): Promise<TestCase[]> => {
-    const macros = await discoverGTestMacros(document);
+const createTestCases = (document: vscode.TextDocument): TestCase[] => {
+    const macros = discoverGTestMacros(document);
     return discoverTestCasesFromMacros(macros);
 };
 
-const isInBuildManifest = (document: vscode.TextDocument): R.Reader<DocumentEnvironment, boolean> => env => {
+const isInBuildManifest = (document: vscode.TextDocument): R.Reader<ExtEnvironment, boolean> => env => {
     return env.targetInfoByFile.has(document.uri.fsPath);
 };

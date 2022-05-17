@@ -14,7 +14,7 @@ const gTestMacroTypeByMacroName = new Map<string, GTestMacroType>([
     ["INSTANTIATE_TYPED_TEST_SUITE_P", GTestMacroType.INSTANTIATE_TYPED_TEST_SUITE_P]
 ]);
 
-export async function discoverGTestMacros(document: vscode.TextDocument) {
+export function discoverGTestMacros(document: vscode.TextDocument) {
     logDebug(`Discovering gtest macros in document ${document.uri}`);
     const documentText = document.getText();
     let gTestMacros: GTestMacro[] = [];
