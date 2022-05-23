@@ -1,14 +1,6 @@
 import { logDebug } from '../utils/logger';
 import { pipe } from 'fp-ts/lib/function';
-import { TestCase, GTestType, GTestMacro, GTestMacroType } from '../types';
-
-const gTestTypeByMacroName = new Map<GTestMacroType, GTestType>([
-    [GTestMacroType.TEST, GTestType.TEST],
-    [GTestMacroType.TEST_F, GTestType.TEST_F],
-    [GTestMacroType.TEST_P, GTestType.TEST_P],
-    [GTestMacroType.TYPED_TEST, GTestType.TYPED_TEST],
-    [GTestMacroType.TYPED_TEST_P, GTestType.TYPED_TEST_P]
-]);
+import { TestCase, GTestMacro, GTestMacroType } from '../types';
 
 export interface MacroByTypes {
     testCases: GTestMacro[];
@@ -51,8 +43,7 @@ function createTestCase(macro: GTestMacro, macroByTypes: MacroByTypes): TestCase
         name: macro.id,
         id: id,
         regExpForId: regExpForId,
-        lineNo: macro.lineNo,
-        gTestType: gTestTypeByMacroName.get(macro.type)!
+        lineNo: macro.lineNo
     }
 }
 

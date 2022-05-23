@@ -1,11 +1,3 @@
-export const enum GTestType {
-    TEST,
-    TEST_F,
-    TEST_P,
-    TYPED_TEST,
-    TYPED_TEST_P
-}
-
 export const enum GTestMacroType {
     TEST,
     TEST_F,
@@ -29,5 +21,4 @@ export type TestCase = {
     id: string;
     regExpForId: RegExp;
     lineNo: number;
-    gTestType: GTestType;
 }
