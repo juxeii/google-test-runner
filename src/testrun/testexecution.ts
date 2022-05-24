@@ -30,16 +30,8 @@ export function runTest(runParams: { rootItem: vscode.TestItem, leafItems: vscod
 
 function handleTestRunUpdates(testRunUpdate: ProcessUpdate, observer: SubscriptionObserver<vscode.TestItem>) {
     const onTestRunUpdate = foldProcessUpdate(
-        (processExit: ProcessExit) => {
-            logDebug(`Test run exited with code ${processExit.code}`);
-            if (processExit.code != 0) {
-                observer.error(new Error('Test run failed!'));
-            }
-        },
-        (processExitBySignal: ProcessExitBySignal) => {
-            logDebug(`Test run exited with signal ${processExitBySignal.signal}`);
-            observer.error(new Error('Test run aborted by signal!'));
-        },
+        (processExit: ProcessExit) => logDebug(`Test run exited with code ${processExit.code}`),
+        (processExitBySignal: ProcessExitBySignal) => logDebug(`Test run exited with signal ${processExitBySignal.signal}`),
         _ => { },
         (processStdErr: ProcessStdErr) => logDebug(processStdErr.signal),
     );

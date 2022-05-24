@@ -22,9 +22,9 @@ export function buildTest(testTarget: string, rootItem: vscode.TestItem) {
         startProcess(cmd)
             .subscribe({
                 next(buildUpate) { handleBuildUpdates(buildUpate, observer) },
-                error(processError: ProcessError) {
-                    logError(`Test build failed with error ${processError.error.message}`);
-                    observer.error(processError.error)
+                error(error: Error) {
+                    logError(`Test build failed with error ${error.message}`);
+                    observer.error(error)
                 },
                 complete() { observer.next(rootItem); observer.complete(); }
             });
@@ -33,16 +33,8 @@ export function buildTest(testTarget: string, rootItem: vscode.TestItem) {
 
 function handleBuildUpdates(buildUpate: ProcessUpdate, observer: SubscriptionObserver<vscode.TestItem>) {
     const onBuildUpdate = foldProcessUpdate(
-        (processExit: ProcessExit) => {
-            logDebug(`Test build exited with code ${processExit.code}`);
-            if (processExit.code != 0) {
-                observer.error(new Error('Test build failed!'));
-            }
-        },
-        (processExitBySignal: ProcessExitBySignal) => {
-            logDebug(`Test build exited with signal ${processExitBySignal.signal}`);
-            observer.error(new Error('Test build aborted by signal!'));
-        },
+        (processExit: ProcessExit) => logDebug(`Test build exited with code ${processExit.code}`),
+        (processExitBySignal: ProcessExitBySignal) => logDebug(`Test build exited with signal ${processExitBySignal.signal}`),
         (processStdOut: ProcessStdOut) => logDebug(processStdOut.signal),
         (processStdErr: ProcessStdErr) => logDebug(processStdErr.signal),
     );

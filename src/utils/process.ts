@@ -51,7 +51,7 @@ export function foldProcessUpdate<R>(
     }
 }
 
-export function startProcess(cmd: string) {
+function startParentProcess(cmd: string) {
     return new Observable<ProcessUpdate>(observer => createSubscriber(cmd, observer));
 }
 
@@ -99,6 +99,33 @@ function configureHandlers(childProcess: cp.ChildProcessWithoutNullStreams, obse
         observer.complete();
     });
 }
+
+export function startProcess(cmd: string) {
+    return new Observable<ProcessUpdate>(observer => {
+        startParentProcess(cmd).subscribe({
+            next(processUpdate) { handleParentUpdate(processUpdate, observer); observer.next(processUpdate); },
+            error(processError: ProcessError) { observer.error(processError.error) },
+            complete() { observer.complete() }
+        });
+    });
+}
+
+function handleParentUpdate(parentUpate: ProcessUpdate, childObserver: SubscriptionObserver<ProcessUpdate>) {
+    const onParentUpdate = foldProcessUpdate(
+        (processExit: ProcessExit) => {
+            if (processExit.code != 0) {
+                childObserver.error(new Error(`Child process failed with code ${processExit.code}`));
+            }
+        },
+        (processExitBySignal: ProcessExitBySignal) => {
+            childObserver.error(new Error(`Child process has been stopped by signal ${processExitBySignal.signal}`));
+        },
+        _ => { },
+        _ => { }
+    );
+    onParentUpdate(parentUpate);
+}
+
 
 export function execShell(cmd: string) {
     return new Promise<string>((resolve, reject) => {
