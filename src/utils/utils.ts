@@ -32,8 +32,8 @@ export function createBuildFolderUriForFilName(fileName: string) {
     return vscode.Uri.file(path.join(buildFolder, fileName));
 }
 
-export const doesFolderExist = (folder: string): boolean => {
-    return fs.existsSync(folder);
+export const doesPathExist = (file: string): boolean => {
+    return fs.existsSync(file);
 }
 
 export const getFileContents = (file: string): string => {
