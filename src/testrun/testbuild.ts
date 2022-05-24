@@ -1,11 +1,10 @@
 
 import * as vscode from 'vscode';
 import * as cfg from '../utils/configuration';
-import { startProcess } from '../utils/system';
-import { logInfo, logDebug } from '../utils/logger';
+import { foldProcessUpdate, ProcessError, ProcessExit, ProcessExitBySignal, ProcessStdErr, ProcessStdOut, ProcessUpdate, startProcess } from '../utils/process';
+import { logInfo, logDebug, logError } from '../utils/logger';
 import { RunEnvironment } from './testrun';
-import { ExtEnvironment } from '../extension';
-import { Observable } from 'observable-fns';
+import { Observable, SubscriptionObserver } from 'observable-fns';
 
 export function buildTests(runEnvironment: RunEnvironment) {
     return Observable.from(rootItems(runEnvironment)).flatMap(rootItem => {
@@ -16,10 +15,38 @@ export function buildTests(runEnvironment: RunEnvironment) {
 
 export function buildTest(testTarget: string, rootItem: vscode.TestItem) {
     logInfo(`Building test target ${testTarget} ...`);
-
     const buildFolder = cfg.getBuildFolder();
     const cmd = `cd ${buildFolder} && ninja ${testTarget}`;
-    return startProcess(cmd, true).flatMap(code => Observable.of(rootItem));
+
+    return new Observable<vscode.TestItem>(observer => {
+        startProcess(cmd)
+            .subscribe({
+                next(buildUpate) { handleBuildUpdates(buildUpate, observer) },
+                error(processError: ProcessError) {
+                    logError(`Test build failed with error ${processError.error.message}`);
+                    observer.error(processError.error)
+                },
+                complete() { observer.next(rootItem); observer.complete(); }
+            });
+    });
+}
+
+function handleBuildUpdates(buildUpate: ProcessUpdate, observer: SubscriptionObserver<vscode.TestItem>) {
+    const onBuildUpdate = foldProcessUpdate(
+        (processExit: ProcessExit) => {
+            logDebug(`Test build exited with code ${processExit.code}`);
+            if (processExit.code != 0) {
+                observer.error(new Error('Test build failed!'));
+            }
+        },
+        (processExitBySignal: ProcessExitBySignal) => {
+            logDebug(`Test build exited with signal ${processExitBySignal.signal}`);
+            observer.error(new Error('Test build aborted by signal!'));
+        },
+        (processStdOut: ProcessStdOut) => logDebug(processStdOut.signal),
+        (processStdErr: ProcessStdErr) => logDebug(processStdErr.signal),
+    );
+    onBuildUpdate(buildUpate);
 }
 
 function rootItems(runEnvironment: RunEnvironment) {

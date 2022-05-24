@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
 import * as cfg from '../utils/configuration';
-import { startProcess } from '../utils/system';
-import { logDebug } from '../utils/logger';
+import { foldProcessUpdate, ProcessError, ProcessExit, ProcessExitBySignal, ProcessStdErr, ProcessStdOut, ProcessUpdate, startProcess } from '../utils/process';
+import { logDebug, logError } from '../utils/logger';
 import { getGTestLogFile, getJSONResultFile } from '../utils/utils';
-import { Observable } from 'observable-fns';
+import { Observable, SubscriptionObserver } from 'observable-fns';
 import { TargetByInfo } from '../parsing/buildninja';
 
 export function runTest(runParams: { rootItem: vscode.TestItem, leafItems: vscode.TestItem[], targetInfoByFile: Map<string, TargetByInfo> }) {
@@ -15,7 +15,35 @@ export function runTest(runParams: { rootItem: vscode.TestItem, leafItems: vscod
     const gtestLogFile = getGTestLogFile(rootItemUri).baseName;
     const cmd = `cd ${cfg.getBuildFolder()} && ${targetFile} --gtest_filter=${filter} --gtest_output=json:${jsonResultFile} --verbose ${verbosityLevel} | tee ${gtestLogFile}`;
 
-    return startProcess(cmd, false).flatMap(code => Observable.of(runParams.rootItem));
+    return new Observable<vscode.TestItem>(observer => {
+        startProcess(cmd)
+            .subscribe({
+                next(testRunUpdate) { handleTestRunUpdates(testRunUpdate, observer) },
+                error(processError: ProcessError) {
+                    logError(`Test run failed with error ${processError.error.message}`);
+                    observer.error(processError.error)
+                },
+                complete() { observer.next(runParams.rootItem); observer.complete(); }
+            });
+    });
+}
+
+function handleTestRunUpdates(testRunUpdate: ProcessUpdate, observer: SubscriptionObserver<vscode.TestItem>) {
+    const onTestRunUpdate = foldProcessUpdate(
+        (processExit: ProcessExit) => {
+            logDebug(`Test run exited with code ${processExit.code}`);
+            if (processExit.code != 0) {
+                observer.error(new Error('Test run failed!'));
+            }
+        },
+        (processExitBySignal: ProcessExitBySignal) => {
+            logDebug(`Test run exited with signal ${processExitBySignal.signal}`);
+            observer.error(new Error('Test run aborted by signal!'));
+        },
+        _ => { },
+        (processStdErr: ProcessStdErr) => logDebug(processStdErr.signal),
+    );
+    onTestRunUpdate(testRunUpdate);
 }
 
 function createRunFilter(items: vscode.TestItem[]) {

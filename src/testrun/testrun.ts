@@ -88,7 +88,7 @@ function createRunHandler(env: ExtEnvironment) {
             .flatMap(rootItem => observeTestResult(rootItem, runEnvironment))
             .subscribe({
                 next(rootItem) { logDebug(`Test evaluation done for ${rootItem.uri}`) },
-                error(err: Error) { onTestRunFinishedWithError(testRun, err) },
+                error(error: Error) { onTestRunFinishedWithError(testRun, error) },
                 complete() { onAllRunsCompleted(testRun, runEnvironment) }
             });
 
@@ -148,7 +148,7 @@ function initializeRunEnvironment(env: ExtEnvironment, runRequest: vscode.TestRu
 
 function onTestRunFinishedWithError(run: vscode.TestRun, err: Error) {
     run.end();
-    printBlock(`Test run finished with error(). Message: ${err.message}`);
+    printBlock(`Test run finished with error message: ${err.message}`);
 }
 
 function onAllRunsCompleted(run: vscode.TestRun, runEnvironment: RunEnvironment) {
