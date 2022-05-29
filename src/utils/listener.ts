@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { logDebug } from './utils/logger';
-import { doesPathExist } from './utils/utils';
+import { logDebug } from './logger';
+import { doesPathExist } from './fsutils';
 import { multicast, Observable } from 'observable-fns';
 
 export const enum FileUpdate {

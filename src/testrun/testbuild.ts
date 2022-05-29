@@ -1,10 +1,10 @@
 
 import * as vscode from 'vscode';
 import * as cfg from '../utils/configuration';
-import { foldProcessUpdate, ProcessError, ProcessExit, ProcessExitBySignal, ProcessStdErr, ProcessStdOut, ProcessUpdate, startProcess } from '../utils/process';
+import { foldProcessUpdate, ProcessUpdate, startProcess } from '../utils/process';
 import { logInfo, logDebug, logError } from '../utils/logger';
 import { RunEnvironment } from './testrun';
-import { Observable, SubscriptionObserver } from 'observable-fns';
+import { Observable } from 'observable-fns';
 
 export function buildTests(runEnvironment: RunEnvironment) {
     return Observable.from(rootItems(runEnvironment)).flatMap(rootItem => {
@@ -21,9 +21,9 @@ export function buildTest(testTarget: string, rootItem: vscode.TestItem) {
     return new Observable<vscode.TestItem>(observer => {
         startProcess(cmd)
             .subscribe({
-                next(buildUpate) { handleBuildUpdates(buildUpate, observer) },
+                next(buildUpate) { handleBuildUpdates(buildUpate) },
                 error(error: Error) {
-                    logError(`Test build failed with error ${error.message}`);
+                    logError(`Test build failed with: ${error.message}`);
                     observer.error(error)
                 },
                 complete() { observer.next(rootItem); observer.complete(); }
@@ -31,14 +31,13 @@ export function buildTest(testTarget: string, rootItem: vscode.TestItem) {
     });
 }
 
-function handleBuildUpdates(buildUpate: ProcessUpdate, observer: SubscriptionObserver<vscode.TestItem>) {
-    const onBuildUpdate = foldProcessUpdate(
-        (processExit: ProcessExit) => logDebug(`Test build exited with code ${processExit.code}`),
-        (processExitBySignal: ProcessExitBySignal) => logDebug(`Test build exited with signal ${processExitBySignal.signal}`),
-        (processStdOut: ProcessStdOut) => logDebug(processStdOut.signal),
-        (processStdErr: ProcessStdErr) => logDebug(processStdErr.signal),
-    );
-    onBuildUpdate(buildUpate);
+function handleBuildUpdates(buildUpate: ProcessUpdate) {
+    foldProcessUpdate(
+        processExit => logDebug(`Test build exited with code ${processExit.code}`),
+        processExitBySignal => logDebug(`Test build exited with signal ${processExitBySignal.signal}`),
+        processStdOut => logDebug(processStdOut.signal),
+        processStdErr => logDebug(processStdErr.signal),
+    )(buildUpate);
 }
 
 function rootItems(runEnvironment: RunEnvironment) {

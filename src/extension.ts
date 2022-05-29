@@ -3,9 +3,9 @@ import * as cfg from './utils/configuration';
 import { logDebug, logError, logInfo } from './utils/logger';
 import { createTargetByFileMapping, TargetByInfo } from './parsing/buildninja';
 import { initTestController, removeDocumentItems } from './testrun/testcontroller';
-import { FileUpdate, observeFileUpdates } from './listener';
+import { FileUpdate, observeFileUpdates } from './utils/listener';
 import { multicast, Observable, Subscription, SubscriptionObserver } from 'observable-fns';
-import { doesPathExist } from './utils/utils';
+import { doesPathExist } from './utils/fsutils';
 import { IO } from 'fp-ts/lib/IO';
 import path = require('path');
 

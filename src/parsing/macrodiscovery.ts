@@ -1,10 +1,26 @@
 import * as vscode from 'vscode';
 import { logDebug } from '../utils/logger';
-import { GTestMacro, GTestMacroType } from '../types';
+
+export const enum GTestMacroType {
+    TEST,
+    TEST_F,
+    TEST_P,
+    TYPED_TEST,
+    TYPED_TEST_P,
+    INSTANTIATE_TEST_SUITE_P,
+    INSTANTIATE_TYPED_TEST_SUITE_P
+}
+
+export type GTestMacro = {
+    type: GTestMacroType;
+    fixture: string;
+    id: string;
+    lineNo: number;
+}
 
 const GTESTMACRO_REGEXP = /^\b(TEST|TEST_F|TEST_P|TYPED_TEST|TYPED_TEST_P|INSTANTIATE_TEST_SUITE_P|INSTANTIATE_TYPED_TEST_SUITE_P)\(\s*(\w+),\s*(\w+)/gm
 
-const gTestMacroTypeByMacroName = new Map<string, GTestMacroType>([
+const gTestMacroTypeByMacroName = new Map([
     ["TEST", GTestMacroType.TEST],
     ["TEST_F", GTestMacroType.TEST_F],
     ["TEST_P", GTestMacroType.TEST_P],
@@ -14,25 +30,26 @@ const gTestMacroTypeByMacroName = new Map<string, GTestMacroType>([
     ["INSTANTIATE_TYPED_TEST_SUITE_P", GTestMacroType.INSTANTIATE_TYPED_TEST_SUITE_P]
 ]);
 
-export function discoverGTestMacros(document: vscode.TextDocument) {
+export const discoverGTestMacros = (document: vscode.TextDocument): GTestMacro[] => {
     logDebug(`Discovering gtest macros in document ${document.uri}`);
-    const documentText = document.getText();
-    let gTestMacros: GTestMacro[] = [];
-
-    [...documentText.matchAll(GTESTMACRO_REGEXP)].forEach(match => {
-        const macro = macroFromMatch(match, document);
-        gTestMacros.push(macro);
-    });
-    return gTestMacros;
+    return [...document.getText().matchAll(GTESTMACRO_REGEXP)].reduce((macros: GTestMacro[], match: RegExpMatchArray) => {
+        const macroLineNo = lineNoFromMatch(document, match);
+        const macro = macroFromMatch(match, macroLineNo);
+        macros.push(macro);
+        return macros;
+    }, []);
 }
 
-function macroFromMatch(match: RegExpMatchArray, document: vscode.TextDocument) {
-    const matchPosition = document.positionAt(match.index!);
+const lineNoFromMatch = (document: vscode.TextDocument, match: RegExpMatchArray): number => {
+    return document.positionAt(match.index!).line + 1;
+}
+
+const macroFromMatch = (match: RegExpMatchArray, macroLineNo: number): GTestMacro => {
     const macro: GTestMacro = {
         type: gTestMacroTypeByMacroName.get(match[1])!,
         fixture: match[2],
         id: match[3],
-        lineNo: matchPosition.line + 1
+        lineNo: macroLineNo
     };
     logDebug(`Macro name ${match[1]} fixture ${macro.fixture} id ${macro.id}`);
     return macro;

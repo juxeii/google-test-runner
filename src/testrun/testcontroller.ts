@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { logDebug, logError } from '../utils/logger';
-import { TestCase } from '../types';
 import { ExtEnvironment } from '../extension';
 import { initRunProfiles } from './testrun';
 import { observeTestCasesUpdates, TestCasesUpdate } from '../documentcontroller';
+import { TestCase } from '../parsing/testdiscovery';
 
 export function initTestController(environment: ExtEnvironment) {
     initRunProfiles(environment);

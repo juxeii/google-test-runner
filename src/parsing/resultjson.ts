@@ -14,7 +14,6 @@ export type TestReport =
         name: string;
         fixture: string;
         id: string;
-        parameter: string | undefined;
         line: number;
         timestamp: string;
         file: string;
@@ -66,7 +65,6 @@ function createTestReport(testCaseJSON: any) {
         name: testCaseJSON.name,
         fixture: testCaseJSON.fixture,
         id: testCaseId(testCaseJSON),
-        parameter: parameter,
         line: testCaseJSON.line,
         timestamp: testCaseJSON.timestamp,
         file: testCaseJSON.file,
@@ -122,7 +120,7 @@ function testCaseId(testcase: any) {
 }
 
 function lineNumberFromFailureMessage(failureMessage: string) {
-    let lineNoRegex = /^.+\:(\d+)/;
-    let lineNoMatch = lineNoRegex.exec(failureMessage)!;
+    const lineNoRegex = /^.+\:(\d+)/;
+    const lineNoMatch = lineNoRegex.exec(failureMessage)!;
     return Number(lineNoMatch[1]) - 1;
 }

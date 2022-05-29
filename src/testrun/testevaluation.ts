@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as rj from '../parsing/resultjson';
 import { RunEnvironment } from './testrun';
 import { logInfo, logDebug, logError } from '../utils/logger';
-import { getJSONResultFile } from '../utils/utils';
+import { getJSONResultFile } from '../utils/fsutils';
 import { multicast, Observable } from 'observable-fns';
 import { createFailureMessage } from '../parsing/failure';
 

@@ -5,7 +5,7 @@ import { buildTest, buildTests } from './testbuild';
 import { observeTestResult } from './testevaluation';
 import { createLeafItemsByRoot } from './testcontroller';
 import { runTest } from './testexecution';
-import { getFileContents, getGTestLogFile } from '../utils/utils';
+import { getFileContents, getGTestLogFile } from '../utils/fsutils';
 import { loadSharedLibsOnDebug } from '../utils/configuration';
 import { ExtEnvironment } from '../extension';
 import { TargetByInfo } from '../parsing/buildninja';

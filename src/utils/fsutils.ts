@@ -4,7 +4,7 @@ import * as cfg from './configuration';
 import fs = require('fs');
 
 export function lastPathOfDocumentUri(uri: vscode.Uri) {
-    return path.basename(uri.path, '.cpp');
+    return path.basename(uri.path);
 }
 
 export function getGTestLogFile(uri: vscode.Uri) {
