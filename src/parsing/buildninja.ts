@@ -8,20 +8,19 @@ export type TargetByInfo = {
     targetFile: string;
 }
 
-export function createTargetByFileMapping() {
+export const createTargetByFileMapping = (): Map<string, TargetByInfo> => {
     const buildFolder = cfg.getBuildFolder();
     const pathf = join(buildFolder, cfg.buildNinjaFileName);
     const rawContents = fs.readFileSync(pathf);
     return fillMappingWithTargetInfo(rawContents.toString());
 }
 
-function fillMappingWithTargetInfo(fileContents: string) {
+const fillMappingWithTargetInfo = (fileContents: string): Map<string, TargetByInfo> => {
     const buildFolder = cfg.getBuildFolder();
     const relPathByTarget = createTargetFileByTargetMapping(fileContents);
-    const targetByFileMapping = new Map<string, TargetByInfo>();
     const fileAndTargetRegExp = new RegExp(/^.*CXX_COMPILER__(\w+)_.+\s+((..)?(?:\/(?:\w|\.|-)+)+).*/, 'gm');
 
-    [...fileContents.matchAll(fileAndTargetRegExp)].forEach(match => {
+    const targetByFileMapping = [...fileContents.matchAll(fileAndTargetRegExp)].reduce((targetByFileMapping: Map<string, TargetByInfo>, match: RegExpMatchArray) => {
         const target = match[1];
         const path = match[2];
         const relTargetFile = relPathByTarget.get(target);
@@ -30,18 +29,18 @@ function fillMappingWithTargetInfo(fileContents: string) {
             const targetFile = resolve(buildFolder, relTargetFile)
             targetByFileMapping.set(sourceFile, { name: target, targetFile: targetFile });
         }
-    });
+        return targetByFileMapping;
+    }, new Map<string, TargetByInfo>());
     logDebug(`Mapped ${targetByFileMapping.size} targets from build manifest.`);
     return targetByFileMapping;
 }
 
-function createTargetFileByTargetMapping(fileContents: string) {
-    let targetFileByTarget = new Map<string, string>();
+const createTargetFileByTargetMapping = (fileContents: string): Map<string, string> => {
     const targetFileRegex = new RegExp(/^build (.*):.*CXX_EXECUTABLE_LINKER__(\w+)_/, 'gm');
-    [...fileContents.matchAll(targetFileRegex)].forEach(match => {
+    return [...fileContents.matchAll(targetFileRegex)].reduce((targetFileByTarget: Map<string, string>, match: RegExpMatchArray) => {
         const targetFile = match[1];
         const target = match[2];
         targetFileByTarget.set(target, targetFile);
-    });
-    return targetFileByTarget;
+        return targetFileByTarget;
+    }, new Map<string, string>());
 }

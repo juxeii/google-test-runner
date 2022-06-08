@@ -39,41 +39,40 @@ export const observeDocumentUpdates = (): Observable<DocumentUpdateInfo> => {
 }
 
 const observeDidChangeActiveEditor = (): Observable<vscode.TextEditor> => {
-    return multicast(new Observable<vscode.TextEditor>(observer => {
+    return new Observable<vscode.TextEditor>(observer => {
         const disposable = vscode.window.onDidChangeActiveTextEditor(editor => {
-            if (!editor) {
-                return;
+            if (editor) {
+                observer.next(editor);
             }
-            observer.next(editor);
         });
         logDebug(`Subscribed to didChangeActiveEditor updates.`);
         return () => {
             logDebug(`Unsubscribed from didChangeActiveEditor updates.`);
             disposable.dispose();
         };
-    }));
+    });
 };
 
 const observeDidSaveTextDocument = (): Observable<vscode.TextDocument> => {
-    return multicast(new Observable<vscode.TextDocument>(observer => {
-        const disposable = vscode.workspace.onDidSaveTextDocument(observer.next);
+    return new Observable<vscode.TextDocument>(observer => {
+        const disposable = vscode.workspace.onDidSaveTextDocument(document => observer.next(document));
         logDebug(`Subscribed to didSaveTextDocument updates.`);
         return () => {
             logDebug(`Unsubscribed from didSaveTextDocument updates.`);
             disposable.dispose();
         };
-    }));
+    });
 };
 
 const observeDidCloseTextDocument = (): Observable<vscode.TextDocument> => {
-    return multicast(new Observable<vscode.TextDocument>(observer => {
-        const disposable = vscode.workspace.onDidCloseTextDocument(observer.next);
+    return new Observable<vscode.TextDocument>(observer => {
+        const disposable = vscode.workspace.onDidCloseTextDocument(document => observer.next(document));
         logDebug(`Subscribed to didCloseTextDocument updates.`);
         return () => {
             logDebug(`Unsubscribed from didCloseTextDocument updates.`);
             disposable.dispose();
         };
-    }));
+    });
 };
 
 export const observeFileUpdates = (file: string): Observable<FileUpdate> => {
