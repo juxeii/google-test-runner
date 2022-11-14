@@ -19,7 +19,7 @@ export function buildTest(testTarget: string, rootItem: vscode.TestItem) {
     const cmd = `cd ${buildFolder} && ninja ${testTarget}`;
 
     return new Observable<vscode.TestItem>(observer => {
-        startProcess(cmd)
+        const subscription = startProcess(cmd)
             .subscribe({
                 next(buildUpate) { handleBuildUpdates(buildUpate) },
                 error(error: Error) {
@@ -28,6 +28,7 @@ export function buildTest(testTarget: string, rootItem: vscode.TestItem) {
                 },
                 complete() { observer.next(rootItem); observer.complete(); }
             });
+        return () => subscription.unsubscribe();
     });
 }
 

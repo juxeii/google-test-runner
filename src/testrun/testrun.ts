@@ -6,7 +6,6 @@ import { observeTestResult } from './testevaluation';
 import { createLeafItemsByRoot } from './testcontroller';
 import { runTest } from './testexecution';
 import { getFileContents, getGTestLogFile } from '../utils/fsutils';
-import { loadSharedLibsOnDebug } from '../utils/configuration';
 import { ExtEnvironment } from '../extension';
 import { TargetByInfo } from '../parsing/buildninja';
 
@@ -66,10 +65,13 @@ function createDebugHandler(env: ExtEnvironment) {
                 'stopAtEntry': false,
                 'cwd': cwd,
                 'externalConsole': false,
-                "symbolLoadInfo": {
-                    "loadAll": loadSharedLibsOnDebug(),
-                    "exceptionList": ""
-                },
+                'MIMode' : "lldb",
+                'miDebuggerPath' : 'lldb-mi',
+                '"setupCommands': [
+                    {
+                        'text': 'settings set symbols.load-on-demand true'
+                    }
+                ]
             });
         }
     }
@@ -93,8 +95,8 @@ function createRunHandler(env: ExtEnvironment) {
             });
 
         const cancelListener = token.onCancellationRequested(() => {
-            skipItemsOnCancel(runEnvironment);
             testRunSubscription.unsubscribe();
+            skipItemsOnCancel(runEnvironment);
             testRun.end();
             cancelListener.dispose();
             printBlock('Test run cancelled.');

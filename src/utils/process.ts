@@ -51,6 +51,17 @@ export function foldProcessUpdate<R>(
     }
 }
 
+export function startProcess(cmd: string) {
+    return new Observable<ProcessUpdate>(observer => {
+        const subscription = startParentProcess(cmd).subscribe({
+            next(processUpdate) { handleParentUpdate(processUpdate, observer); observer.next(processUpdate); },
+            error(processError: ProcessError) { observer.error(processError.error) },
+            complete() { observer.complete() }
+        });
+        return () => subscription.unsubscribe();
+    });
+}
+
 function startParentProcess(cmd: string) {
     return new Observable<ProcessUpdate>(observer => createSubscriber(cmd, observer));
 }
@@ -65,7 +76,7 @@ function createSubscriber(cmd: string, observer: SubscriptionObserver<any>) {
 }
 
 function onUnsubscribe(childProcess: cp.ChildProcessWithoutNullStreams, hasExited: { value: boolean }) {
-    if (hasExited) {
+    if (hasExited.value == true) {
         return;
     }
     kill(childProcess.pid, 'SIGINT');
@@ -97,16 +108,6 @@ function configureHandlers(childProcess: cp.ChildProcessWithoutNullStreams, obse
             observer.next(exitMsg);
         }
         observer.complete();
-    });
-}
-
-export function startProcess(cmd: string) {
-    return new Observable<ProcessUpdate>(observer => {
-        startParentProcess(cmd).subscribe({
-            next(processUpdate) { handleParentUpdate(processUpdate, observer); observer.next(processUpdate); },
-            error(processError: ProcessError) { observer.error(processError.error) },
-            complete() { observer.complete() }
-        });
     });
 }
 

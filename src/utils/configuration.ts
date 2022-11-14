@@ -28,10 +28,6 @@ export function gtestVerbosityLevel() {
     return getConfigurationSetting<string>('gtestVerbosityLevel')!;
 }
 
-export function loadSharedLibsOnDebug() {
-    return getConfigurationSetting<boolean>('loadSharedLibsOnDebug')!;
-}
-
 export const isBuildNinjaFilePresent = (): boolean => {
     const buildNinjaPath = path.join(getBuildFolder(), buildNinjaFileName);
     return fs.existsSync(buildNinjaPath);
