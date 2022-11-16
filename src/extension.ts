@@ -19,6 +19,17 @@ export type ExtEnvironment = {
 export function activate(context: vscode.ExtensionContext) {
     logInfo(`${cfg.extensionName} activated.`);
 
+    logDebug(`Check for working environment...`);
+    var commandExistsSync = require('command-exists').sync;
+
+    if (commandExistsSync('ninja')) {
+        logDebug(`Ninja does exist.`);
+    } else {
+        logError(`Ninja does not exist! Make sure you have a working environment sourced!`);
+        showWarningMessage(`Ninja does not exist! Make sure you have a working environment sourced!`)();
+    }
+    logDebug(`Environment seems fine.`);
+
     const environment = createExtEnvironment(context);
     subscribeToBuildManifestUpdates(environment);
 }
