@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { logInfo, logDebug, logError, outputChannelGT } from '../utils/logger';
+import { logInfo, logDebug, logError, outputChannelGT, logWarning } from '../utils/logger';
 import { buildTest, buildTests } from './testbuild';
 import { observeTestResult } from './testevaluation';
 import { createLeafItemsByRoot } from './testcontroller';
 import { runTest } from './testexecution';
 import { getFileContents, getGTestLogFile } from '../utils/fsutils';
-import { ExtEnvironment } from '../extension';
+import { loadSharedLibsOnDebugForGdb, debuggerProgram } from '../utils/configuration';
+import { ExtEnvironment, showWarningMessage } from '../extension';
 import { TargetByInfo } from '../parsing/buildninja';
 
 export type RunEnvironment = {
@@ -37,6 +38,16 @@ function createDebugHandler(env: ExtEnvironment) {
             return;
         }
 
+        const debuggerExec = debuggerProgram();
+        if (debuggerExec == 'lldb') {
+            var commandExistsSync = require('command-exists').sync;
+            if (!commandExistsSync('lldb-mi')) {
+                logWarning(`lldb-mi not exist! Make sure you have it installed and sourced in your environemnt. Debug seesion failed!`);
+                showWarningMessage(`lldb-mi not exist! Make sure you have it installed and sourced in your environemnt. Debug seesion failed!`)();
+                return;
+            }
+        }
+
         const testItem = runRequest.include[0];
         const targetName = env.targetInfoByFile.get(testItem.uri!.fsPath)!.name;
         buildTest(targetName, testItem).subscribe({
@@ -57,22 +68,39 @@ function createDebugHandler(env: ExtEnvironment) {
                 printBlock('Debug session ended.');
             });
 
-            vscode.debug.startDebugging(workspaceFolder, {
-                'name': 'GTestRunner Debug',
-                'type': 'cppdbg',
-                'request': 'launch',
-                'program': targetFile,
-                'stopAtEntry': false,
-                'cwd': cwd,
-                'externalConsole': false,
-                'MIMode' : "lldb",
-                'miDebuggerPath' : 'lldb-mi',
-                '"setupCommands': [
-                    {
-                        'text': 'settings set symbols.load-on-demand true'
-                    }
-                ]
-            });
+            if (debuggerExec == 'lldb') {
+                vscode.debug.startDebugging(workspaceFolder, {
+                    'name': 'GTestRunner Debug',
+                    'type': 'cppdbg',
+                    'request': 'launch',
+                    'program': targetFile,
+                    'stopAtEntry': false,
+                    'cwd': cwd,
+                    'externalConsole': false,
+                    'MIMode': "lldb",
+                    'miDebuggerPath': 'lldb-mi',
+                    '"setupCommands': [
+                        {
+                            'text': 'settings set symbols.load-on-demand true'
+                        }
+                    ]
+                });
+            }
+            else {
+                vscode.debug.startDebugging(workspaceFolder, {
+                    'name': 'GTestRunner Debug',
+                    'type': 'cppdbg',
+                    'request': 'launch',
+                    'program': targetFile,
+                    'stopAtEntry': false,
+                    'cwd': cwd,
+                    'externalConsole': false,
+                    "symbolLoadInfo": {
+                        "loadAll": loadSharedLibsOnDebugForGdb(),
+                        "exceptionList": ""
+                    },
+                });
+            }
         }
     }
 }

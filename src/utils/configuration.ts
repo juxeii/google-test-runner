@@ -28,6 +28,14 @@ export function gtestVerbosityLevel() {
     return getConfigurationSetting<string>('gtestVerbosityLevel')!;
 }
 
+export function loadSharedLibsOnDebugForGdb() {
+    return getConfigurationSetting<boolean>('loadSharedLibsOnDebug')!;
+}
+
+export function debuggerProgram() {
+    return getConfigurationSetting<string>('debugger')!;
+}
+
 export const isBuildNinjaFilePresent = (): boolean => {
     const buildNinjaPath = path.join(getBuildFolder(), buildNinjaFileName);
     return fs.existsSync(buildNinjaPath);

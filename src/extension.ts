@@ -19,19 +19,27 @@ export type ExtEnvironment = {
 export function activate(context: vscode.ExtensionContext) {
     logInfo(`${cfg.extensionName} activated.`);
 
-    logDebug(`Check for working environment...`);
-    var commandExistsSync = require('command-exists').sync;
-
-    if (commandExistsSync('ninja')) {
-        logDebug(`Ninja does exist.`);
-    } else {
-        logError(`Ninja does not exist! Make sure you have a working environment sourced!`);
-        showWarningMessage(`Ninja does not exist! Make sure you have a working environment sourced!`)();
+    if (!isEnvironmentValid()) {
+        return;
     }
-    logDebug(`Environment seems fine.`);
-
     const environment = createExtEnvironment(context);
     subscribeToBuildManifestUpdates(environment);
+}
+
+const isEnvironmentValid = (): boolean => {
+    var commandExistsSync = require('command-exists').sync;
+
+    logDebug(`Checking environment...`);
+    if (commandExistsSync('ninja')) {
+        logDebug(`Ninja does exist.`);
+    }
+    else {
+        logError(`Ninja does not exist! Make sure you have a working environment sourced!`);
+        showErrorMessage(`Ninja does not exist! Make sure you have a working environment sourced!`)();
+        return false;
+    }
+    logDebug(`Environment seems fine.`);
+    return true;
 }
 
 const subscribeToBuildManifestUpdates = (environment: ExtEnvironment): void => {
@@ -140,6 +148,7 @@ const showBuildManifestMissingMessage = (): void => {
     showWarningMessage(noBuildManifestMessage)();
 }
 
-const showWarningMessage = (message: string): IO<void> => () => vscode.window.showWarningMessage(message)
+export const showWarningMessage = (message: string): IO<void> => () => vscode.window.showWarningMessage(message)
+export const showErrorMessage = (message: string): IO<void> => () => vscode.window.showErrorMessage(message);
 
 export function deactivate() { }

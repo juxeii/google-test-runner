@@ -13,9 +13,15 @@ export function logDebug(message: string) {
     loggerImpl.debug(message);
 }
 
+export function logWarning(message: string) {
+    loggerImpl.warning(message);
+}
+
+
 export function logError(message: string) {
     loggerImpl.error(message);
 }
+
 class OutputChannelTransport extends Transport {
     outputChannel: vscode.OutputChannel;
 

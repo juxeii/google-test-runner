@@ -50,6 +50,21 @@
                         "error"
                     ],
                     "default": "debug"
+                },
+                "googletestrunner.debugger": {
+                    "scope": "window",
+                    "type": "string",
+                    "description": "Select which debugger to use.",
+                    "enum": [
+                        "gdb",
+                        "lldb"
+                    ],
+                    "default": "gdb"
+                },
+                "googletestrunner.loadSharedLibsOnDebugForGdb": {
+                    "type": "boolean",
+                    "default": "true",
+                    "description": "Loads all shared libraries and symbols for gdb. Disable it to get faster startup. You can manually add libs later."
                 }
             }
         }
