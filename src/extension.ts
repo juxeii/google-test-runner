@@ -4,7 +4,7 @@ import { logDebug, logError, logInfo } from './utils/logger';
 import { createTargetByFileMapping, TargetByInfo } from './parsing/buildninja';
 import { initTestController, removeDocumentItems } from './testrun/testcontroller';
 import { FileUpdate, observeFileUpdates } from './utils/listener';
-import { multicast, Observable, Subscription, SubscriptionObserver } from 'observable-fns';
+import { Observable, Subscription, SubscriptionObserver } from 'observable-fns';
 import { doesPathExist } from './utils/fsutils';
 import { IO } from 'fp-ts/lib/IO';
 import path = require('path');
@@ -63,6 +63,7 @@ const fillTargetInfo = (targetByFileMapping: Map<string, TargetByInfo>, environm
 
 const resyncDocuments = (environment: ExtEnvironment): void => {
     logDebug(`Resync parsed documents on build manifest change.`);
+
     environment.parsedDocuments.forEach(document => {
         if (!environment.targetInfoByFile.has(document.uri.fsPath)) {
             environment.parsedDocuments.delete(document);
@@ -87,7 +88,7 @@ const createTestController = (context: vscode.ExtensionContext): vscode.TestCont
 }
 
 const observeTargetInfoUpdates = (): Observable<Map<string, TargetByInfo>> => {
-    return multicast(new Observable<Map<string, TargetByInfo>>(observer => {
+    return new Observable<Map<string, TargetByInfo>>(observer => {
         let targetInfoSubscription: Subscription<FileUpdate>;
         observeBuildFolderChange().subscribe(folder => {
             if (!doesPathExist(folder)) {
@@ -104,11 +105,11 @@ const observeTargetInfoUpdates = (): Observable<Map<string, TargetByInfo>> => {
             logDebug(`Unsubscribing from build folder updates.`);
             targetInfoSubscription.unsubscribe();
         };
-    }));
+    });
 }
 
 const observeBuildFolderChange = (): Observable<string> => {
-    return multicast(new Observable<string>(observer => {
+    return new Observable<string>(observer => {
         const configurationListener = vscode.workspace.onDidChangeConfiguration(event => {
             if (cfg.hasBuildFolderChanged(event)) {
                 observer.next(cfg.getBuildFolder());
@@ -120,7 +121,7 @@ const observeBuildFolderChange = (): Observable<string> => {
             logDebug(`Unsubscribing from build folder updates.`);
             configurationListener.dispose();
         };
-    }));
+    });
 }
 
 const emitTargetInfo = (observer: SubscriptionObserver<Map<string, TargetByInfo>>): Subscription<FileUpdate> => {

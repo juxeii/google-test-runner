@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { logDebug } from './logger';
 import { doesPathExist } from './fsutils';
-import { multicast, Observable } from 'observable-fns';
+import { Observable } from 'observable-fns';
 
 export const enum FileUpdate {
     CREATED,
@@ -21,7 +21,7 @@ export type DocumentUpdateInfo = {
 }
 
 export const observeDocumentUpdates = (): Observable<DocumentUpdateInfo> => {
-    return multicast(new Observable<DocumentUpdateInfo>(observer => {
+    return new Observable<DocumentUpdateInfo>(observer => {
         const changeSub = observeDidChangeActiveEditor().subscribe(editor => observer.next({ document: editor.document, updateType: DocumentUpdate.SWITCHED_ACTIVE }));
         const saveSub = observeDidSaveTextDocument().subscribe(document => observer.next({ document: document, updateType: DocumentUpdate.SAVED }));
         const closeSub = observeDidCloseTextDocument().subscribe(document => observer.next({ document: document, updateType: DocumentUpdate.CLOSED }));
@@ -35,7 +35,7 @@ export const observeDocumentUpdates = (): Observable<DocumentUpdateInfo> => {
             saveSub.unsubscribe();
             closeSub.unsubscribe();
         };
-    }));
+    });
 }
 
 const observeDidChangeActiveEditor = (): Observable<vscode.TextEditor> => {
@@ -77,7 +77,7 @@ const observeDidCloseTextDocument = (): Observable<vscode.TextDocument> => {
 
 export const observeFileUpdates = (file: string): Observable<FileUpdate> => {
     const fileListener = vscode.workspace.createFileSystemWatcher(file);
-    return multicast(new Observable<FileUpdate>(observer => {
+    return new Observable<FileUpdate>(observer => {
         fileListener.onDidCreate(_ => observer.next(FileUpdate.CREATED));
         fileListener.onDidChange(_ => observer.next(FileUpdate.CHANGED));
         fileListener.onDidDelete(_ => observer.next(FileUpdate.DELETED));
@@ -92,5 +92,5 @@ export const observeFileUpdates = (file: string): Observable<FileUpdate> => {
             logDebug(`Unsubscribed from ${file} updates.`);
             fileListener.dispose();
         };
-    }));
+    });
 };
