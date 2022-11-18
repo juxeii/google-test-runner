@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { logDebug } from '../utils/logger';
 import fs = require('fs');
+import { Observable } from 'observable-fns';
 
 export type TestFailure =
     {
@@ -24,11 +25,23 @@ export type TestReport =
 export function createTestReportById(resultJSONUri: vscode.Uri) {
     const parsedJSON = parse(resultJSONUri);
 
-    const testReportById = createTestReports(parsedJSON);
+    return Observable.from(parsedJSON.testsuites)
+        .flatMap((testSuiteJSON: any) => Observable.from(testSuiteJSON.testsuite))
+        .map(createTestReport)
+        .reduce((testReportById: Map<string, TestReport[]>, testReport: TestReport) => {
+            processTestReport(testReport, testReportById);
+            return testReportById;
+        }, new Map<string, TestReport[]>())
+        .map((testReportById: Map<string, TestReport[]>) => {
+            printTestReportById(testReportById);
+            return testReportById;
+        });
+}
+
+function printTestReportById(testReportById: Map<string, TestReport[]>) {
     testReportById.forEach((reports, id) => {
         logDebug(`Testreport with id ${id} passed ${reports[0].hasPassed}`);
     });
-
     return testReportById;
 }
 
@@ -38,17 +51,7 @@ function parse(resultJSONUri: vscode.Uri) {
     return JSON.parse(jsonResult);
 }
 
-function createTestReports(parsedJSON: any) {
-    let testReportById = new Map<string, TestReport[]>();
-    parsedJSON.testsuites.forEach((testSuiteJSON: { name: any; testsuite: any[]; }) => {
-        logDebug(`Processing testSuiteJSON ${testSuiteJSON.name}`);
-        testSuiteJSON.testsuite.forEach(testCaseJSON => processTestCaseJSON(testCaseJSON, testReportById));
-    });
-    return testReportById;
-}
-
-function processTestCaseJSON(testCaseJSON: any, testReportById: Map<string, TestReport[]>) {
-    const testReport = createTestReport(testCaseJSON);
+function processTestReport(testReport: TestReport, testReportById: Map<string, TestReport[]>) {
     let currentTestReports = testReportById.get(testReport.id);
     if (!currentTestReports) {
         currentTestReports = [];

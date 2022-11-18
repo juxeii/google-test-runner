@@ -3,22 +3,18 @@ import * as rj from '../parsing/resultjson';
 import { RunEnvironment } from './testrun';
 import { logInfo, logDebug, logError } from '../utils/logger';
 import { getJSONResultFile } from '../utils/fsutils';
-import { multicast, Observable } from 'observable-fns';
 import { createFailureMessage } from '../parsing/failure';
 import * as cfg from '../utils/configuration';
 import { convertXMLToJSON } from '../utils/xmlutils';
 
 export function observeTestResult(rootItem: vscode.TestItem, runEnvironment: RunEnvironment) {
-    return multicast(new Observable<vscode.TestItem>(observer => {
-        const testReportById = createTestReportById(rootItem);
-        if (hasEvaluatedWithoutErrors(rootItem, runEnvironment, testReportById)) {
-            observer.next(rootItem);
-            observer.complete();
-        }
-        else {
-            observer.error(1)
-        }
-    }));
+    return createTestReportById(rootItem)
+        .map((testReportById: Map<string, rj.TestReport[]>) => {
+            if (!hasEvaluatedWithoutErrors(rootItem, runEnvironment, testReportById)) {
+                throw new Error('Internal test evaluation error!');
+            }
+            return rootItem;
+        });
 }
 
 function createTestReportById(rootItem: vscode.TestItem) {
