@@ -13,7 +13,13 @@ export function runTest(runParams: { rootItem: vscode.TestItem, leafItems: vscod
     const jsonResultFile = getJSONResultFile(runParams.rootItem.uri!).baseName;
     const verbosityLevel = cfg.gtestVerbosityLevel();
     const gtestLogFile = getGTestLogFile(rootItemUri).baseName;
-    const cmd = `cd ${cfg.getBuildFolder()} && ${targetFile} --gtest_filter=${filter} --gtest_output=json:${jsonResultFile} --verbose ${verbosityLevel} | tee ${gtestLogFile}`;
+
+    let outputType = 'json';
+    if (cfg.legacySupport()) {
+        outputType = 'xml';
+        logDebug(`Legacy support generates XML instead of JSON file.`);
+    }
+    const cmd = `cd ${cfg.getBuildFolder()} && ${targetFile} --gtest_filter=${filter} --gtest_output=${outputType}:${jsonResultFile} --verbose ${verbosityLevel} | tee ${gtestLogFile}`;
 
     return new Observable<vscode.TestItem>(observer => {
         startProcess(cmd)

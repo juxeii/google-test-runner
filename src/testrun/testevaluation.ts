@@ -5,6 +5,8 @@ import { logInfo, logDebug, logError } from '../utils/logger';
 import { getJSONResultFile } from '../utils/fsutils';
 import { multicast, Observable } from 'observable-fns';
 import { createFailureMessage } from '../parsing/failure';
+import * as cfg from '../utils/configuration';
+import { convertXMLToJSON } from '../utils/xmlutils';
 
 export function observeTestResult(rootItem: vscode.TestItem, runEnvironment: RunEnvironment) {
     return multicast(new Observable<vscode.TestItem>(observer => {
@@ -22,6 +24,12 @@ export function observeTestResult(rootItem: vscode.TestItem, runEnvironment: Run
 function createTestReportById(rootItem: vscode.TestItem) {
     const jsonResultFile = getJSONResultFile(rootItem.uri!);
     logDebug(`Evaluating json result file ${jsonResultFile.baseName}`);
+
+    if (cfg.legacySupport()) {
+        logDebug(`Converting XML to proper JSON format.`);
+        convertXMLToJSON(jsonResultFile.uri);
+    }
+
     return rj.createTestReportById(jsonResultFile.uri);
 }
 

@@ -4,6 +4,7 @@ import { logInfo, logDebug } from '../utils/logger';
 import { none, Option, some } from 'fp-ts/lib/Option';
 import { pipe } from 'fp-ts/lib/function';
 import * as O from 'fp-ts/Option'
+import * as cfg from '../utils/configuration';
 
 const assertTrueFalseRegex = /Value of/g;
 const expectRegex = /Expected:/g;
@@ -72,6 +73,10 @@ export const createFailureMessage = (item: vscode.TestItem, failure: rj.TestFail
 }
 
 const maybeDiffMessage = (item: vscode.TestItem, failureMessage: string, failure: rj.TestFailure): Option<vscode.TestMessage> => {
+    if (cfg.legacySupport()) {
+        logDebug(`No specific failure messages in legacy mode.`);
+        return none;
+    }
     for (let msgParamsCreator of msgParamsCreators) {
         const maybeMsg = msgParamsCreator(item, failureMessage, failure);
         if (O.isSome(maybeMsg)) {

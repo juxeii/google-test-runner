@@ -32,6 +32,10 @@ export function loadSharedLibsOnDebugForGdb() {
     return getConfigurationSetting<boolean>('loadSharedLibsOnDebug')!;
 }
 
+export function legacySupport() {
+    return getConfigurationSetting<boolean>('legacySupport')!;
+}
+
 export function debuggerProgram() {
     return getConfigurationSetting<string>('debugger')!;
 }
