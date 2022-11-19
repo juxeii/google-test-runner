@@ -38,17 +38,45 @@ function getTestCases(macroByTypes: MacroByTypes) {
             return macroByTypes.instantiateTypedTestSuite.find(ps => ps.id === macro.fixture);
         }
         return true;
-    }).map(macro => createTestCase(macro, macroByTypes));
+    }).flatMap(macro => createTestCases(macro, macroByTypes));
 }
 
-function createTestCase(macro: GTestMacro, macroByTypes: MacroByTypes): TestCase {
-    const id = createTestCaseId(macro, macroByTypes);
-    return {
+function createTestCases(macro: GTestMacro, macroByTypes: MacroByTypes): TestCase[] {
+    const fixtureName = macro.fixture;
+    const testCaseName = macro.id;
+    if (macro.name === 'TEST_P') {
+        return macroByTypes.instantiateTestSuiteP
+            .filter(ps => ps.id === fixtureName)
+            .map(paramSuite => {
+                const id = paramSuite.fixture + '/' + fixtureName + '.' + testCaseName + '/*'
+                return {
+                    fixture: macro.fixture,
+                    name: macro.id,
+                    id: id,
+                    lineNo: macro.lineNo
+                }
+            })
+    }
+    if (macro.name === 'TYPED_TEST_P') {
+        return macroByTypes.instantiateTypedTestSuite
+            .filter(ps => ps.id === fixtureName)
+            .map(paramTypeSuite => {
+                const id = paramTypeSuite.fixture + '/' + fixtureName + '/*.' + testCaseName
+                return {
+                    fixture: macro.fixture,
+                    name: macro.id,
+                    id: id,
+                    lineNo: macro.lineNo
+                }
+            })
+    }
+    const id = createTestCaseId(macro);
+    return [{
         fixture: macro.fixture,
         name: macro.id,
         id: id,
         lineNo: macro.lineNo
-    }
+    }]
 }
 
 const getMacroByTypes = (gTestMacros: GTestMacro[]): MacroByTypes => {
@@ -66,37 +94,17 @@ const getMacroByTypes = (gTestMacros: GTestMacro[]): MacroByTypes => {
     }, { testCases: [], instantiateTestSuiteP: [], instantiateTypedTestSuite: [] });
 }
 
-function createTestCaseId(macro: GTestMacro, macroByTypes: MacroByTypes) {
+function createTestCaseId(macro: GTestMacro) {
     const fixtureName = macro.fixture;
     const testCaseName = macro.id;
-    if (macro.name === 'TEST_P') {
-        return idForTEST_P(testCaseName, fixtureName, macroByTypes);
-    }
     if (macro.name === 'TYPED_TEST') {
         return idForTYPED_TEST(testCaseName, fixtureName);
-    }
-    if (macro.name === 'TYPED_TEST_P') {
-        return idForTYPED_TEST_P(testCaseName, fixtureName, macroByTypes);
     }
     return idForTEST(testCaseName, fixtureName);
 }
 
-function idForTEST_P(testCaseName: string, fixtureName: string, macroByTypes: MacroByTypes) {
-    const paramSuite = macroByTypes.instantiateTestSuiteP.find(ps => {
-        return ps.id === fixtureName;
-    })!;
-    return paramSuite.fixture + '/' + fixtureName + '.' + testCaseName + '/*';
-}
-
 function idForTYPED_TEST(testCaseName: string, fixtureName: string) {
     return fixtureName + '/*.' + testCaseName;
-}
-
-function idForTYPED_TEST_P(testCaseName: string, fixtureName: string, macroByTypes: MacroByTypes) {
-    const paramTypeSuite = macroByTypes.instantiateTypedTestSuite.find(tps => {
-        return tps.id === fixtureName;
-    })!;
-    return paramTypeSuite.fixture + '/' + fixtureName + '/*.' + testCaseName;
 }
 
 function idForTEST(testCaseName: string, fixtureName: string,) {

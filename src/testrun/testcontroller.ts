@@ -59,7 +59,7 @@ function lineNoToRange(lineNo: number) {
 }
 
 function addTestCaseItem(testController: vscode.TestController, testCase: TestCase, document: vscode.TextDocument, parent: vscode.TestItem) {
-    const testCaseItem = testController.createTestItem(testCase.id, testCase.name, document.uri);
+    const testCaseItem = testController.createTestItem(testCase.id, testCase.id, document.uri);
     testCaseItem.range = lineNoToRange(testCase.lineNo - 1);
     parent.children.add(testCaseItem);
     logDebug(`Added testCaseItem ${testCaseItem.id} to parent ${parent.id}`);
