@@ -42,8 +42,9 @@ function createDebugHandler(env: ExtEnvironment) {
         if (debuggerExec == 'lldb') {
             var commandExistsSync = require('command-exists').sync;
             if (!commandExistsSync('lldb-mi')) {
-                logWarning(`lldb-mi not exist! Make sure you have it installed and sourced in your environemnt. Debug seesion failed!`);
-                showWarningMessage(`lldb-mi not exist! Make sure you have it installed and sourced in your environemnt. Debug seesion failed!`)();
+                const warnMessage = 'lldb-mi not exist! Make sure you have it installed and sourced in your environemnt. Debug seesion failed!';
+                logWarning(warnMessage);
+                showWarningMessage(warnMessage)();
                 return;
             }
         }
@@ -51,8 +52,8 @@ function createDebugHandler(env: ExtEnvironment) {
         const testItem = runRequest.include[0];
         const targetName = env.targetInfoByFile.get(testItem.uri!.fsPath)!.name;
         buildTest(targetName, testItem).subscribe({
-            next(rootItem) { logDebug(`Debug build finished.`) },
-            error(err) { logError(`Debug build failed!`) },
+            next() { logDebug(`Debug build finished.`) },
+            error() { logError(`Debug build failed!`) },
             complete() { debug() }
         });
 
@@ -192,16 +193,18 @@ function showLogFiles(runEnvironment: RunEnvironment) {
         const gTestLogFile = getGTestLogFile(rootItem.uri!).uri;
         logInfo(`Log file for ${rootItem.id}: ${gTestLogFile}`);
 
-        outputChannelGT.appendLine('***********************************************');
+        outputChannelGT.appendLine(logDelimiterLine);
         const logFileText = getFileContents(gTestLogFile.fsPath);
         outputChannelGT.show(true);
         outputChannelGT.appendLine(logFileText);
-        outputChannelGT.appendLine('***********************************************');
+        outputChannelGT.appendLine(logDelimiterLine);
     });
 }
 
 function printBlock(blockText: string) {
-    logInfo('***********************************************');
+    logInfo(logDelimiterLine);
     logInfo(blockText);
-    logInfo('***********************************************');
+    logInfo(logDelimiterLine);
 }
+
+const logDelimiterLine = '***********************************************';

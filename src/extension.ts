@@ -34,8 +34,9 @@ const isEnvironmentValid = (): boolean => {
         logDebug(`Ninja does exist.`);
     }
     else {
-        logError(`Ninja does not exist! Make sure you have a working environment sourced!`);
-        showErrorMessage(`Ninja does not exist! Make sure you have a working environment sourced!`)();
+        const errorMessage = 'Ninja does not exist! Make sure you have a working environment sourced!';
+        logError(errorMessage);
+        showErrorMessage(errorMessage)();
         return false;
     }
     logDebug(`Environment seems fine.`);

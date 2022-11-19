@@ -6,7 +6,6 @@ export type TestCase = {
     fixture: string;
     name: string;
     id: string;
-    regExpForId: RegExp;
     lineNo: number;
 }
 export interface MacroByTypes {
@@ -43,12 +42,11 @@ function getTestCases(macroByTypes: MacroByTypes) {
 }
 
 function createTestCase(macro: GTestMacro, macroByTypes: MacroByTypes): TestCase {
-    const { id, regExpForId } = createTestCaseId(macro, macroByTypes);
+    const id = createTestCaseId(macro, macroByTypes);
     return {
         fixture: macro.fixture,
         name: macro.id,
         id: id,
-        regExpForId: regExpForId,
         lineNo: macro.lineNo
     }
 }
@@ -87,28 +85,20 @@ function idForTEST_P(testCaseName: string, fixtureName: string, macroByTypes: Ma
     const paramSuite = macroByTypes.parameterSuites.find(ps => {
         return ps.id === fixtureName;
     })!;
-    const id = paramSuite.fixture + '/' + fixtureName + '.' + testCaseName + '/*';
-    const regExpForId = new RegExp(`${paramSuite.fixture}\/${fixtureName}\.${testCaseName}\/\d+`);
-    return { id, regExpForId }
+    return paramSuite.fixture + '/' + fixtureName + '.' + testCaseName + '/*';
 }
 
 function idForTYPED_TEST(testCaseName: string, fixtureName: string,) {
-    const id = fixtureName + '/*.' + testCaseName;
-    const regExpForId = new RegExp(`${fixtureName}\/\d+\.${testCaseName}`);
-    return { id, regExpForId }
+    return fixtureName + '/*.' + testCaseName;
 }
 
 function idForTYPED_TEST_P(testCaseName: string, fixtureName: string, macroByTypes: MacroByTypes) {
     const paramTypeSuite = macroByTypes.typedParameterSuites.find(tps => {
         return tps.id === fixtureName;
     })!;
-    const id = paramTypeSuite.fixture + '/' + fixtureName + '/*.' + testCaseName;
-    const regExpForId = new RegExp(`${paramTypeSuite.fixture}\/${fixtureName}\/\d+\.${testCaseName}`);
-    return { id, regExpForId }
+    return paramTypeSuite.fixture + '/' + fixtureName + '/*.' + testCaseName;
 }
 
 function idForTEST(testCaseName: string, fixtureName: string,) {
-    const id = fixtureName + '.' + testCaseName;
-    const regExpForId = new RegExp(`${fixtureName}\.${testCaseName}`);
-    return { id, regExpForId };
+    return fixtureName + '.' + testCaseName;
 }

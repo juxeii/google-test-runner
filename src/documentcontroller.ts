@@ -6,7 +6,6 @@ import { discoverTestCasesFromMacros, TestCase } from './parsing/testdiscovery';
 import { DocumentUpdate, DocumentUpdateInfo, observeDocumentUpdates } from './utils/listener';
 import { ExtEnvironment } from './extension';
 import { Observable } from 'observable-fns';
-import { pipe } from 'fp-ts/lib/function';
 
 export type TestCasesUpdate = {
     document: vscode.TextDocument;
@@ -38,13 +37,9 @@ const updateInfo2TestCasesUpdate = (updateInfo: DocumentUpdateInfo, environment:
     return { document: document, testCases: [] };
 }
 
-
-const createTestCases = (document: vscode.TextDocument): TestCase[] => {
-    return pipe(
-        document,
-        discoverGTestMacros,
-        discoverTestCasesFromMacros
-    )
+const createTestCases = (document: vscode.TextDocument) => {
+    const macros = discoverGTestMacros(document);
+    return discoverTestCasesFromMacros(macros);
 }
 
 const isInBuildManifest = (document: vscode.TextDocument): R.Reader<ExtEnvironment, boolean> => env => {
