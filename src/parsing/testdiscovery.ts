@@ -1,6 +1,6 @@
 import { logDebug } from '../utils/logger';
 import { pipe } from 'fp-ts/lib/function';
-import { GTestMacro, GTestMacroType } from './macrodiscovery';
+import { GTestMacro } from './macrodiscovery';
 
 export type TestCase = {
     fixture: string;
@@ -10,8 +10,8 @@ export type TestCase = {
 }
 export interface MacroByTypes {
     testCases: GTestMacro[];
-    parameterSuites: GTestMacro[];
-    typedParameterSuites: GTestMacro[];
+    instantiateTestSuiteP: GTestMacro[];
+    instantiateTypedTestSuite: GTestMacro[];
 }
 
 export function discoverTestCasesFromMacros(gTestMacros: GTestMacro[]) {
@@ -31,11 +31,11 @@ function printTestCases(testCases: TestCase[]) {
 
 function getTestCases(macroByTypes: MacroByTypes) {
     return macroByTypes.testCases.filter(macro => {
-        if (macro.type === GTestMacroType.TEST_P) {
-            return macroByTypes.parameterSuites.find(ps => ps.id === macro.fixture);
+        if (macro.name === 'TEST_P') {
+            return macroByTypes.instantiateTestSuiteP.find(ps => ps.id === macro.fixture);
         }
-        if (macro.type === GTestMacroType.TYPED_TEST_P) {
-            return macroByTypes.typedParameterSuites.find(ps => ps.id === macro.fixture);
+        if (macro.name === 'TYPED_TEST_P') {
+            return macroByTypes.instantiateTypedTestSuite.find(ps => ps.id === macro.fixture);
         }
         return true;
     }).map(macro => createTestCase(macro, macroByTypes));
@@ -53,47 +53,47 @@ function createTestCase(macro: GTestMacro, macroByTypes: MacroByTypes): TestCase
 
 const getMacroByTypes = (gTestMacros: GTestMacro[]): MacroByTypes => {
     return gTestMacros.reduce((macroByTypes: MacroByTypes, macro: GTestMacro) => {
-        if (macro.type === GTestMacroType.INSTANTIATE_TEST_SUITE_P) {
-            macroByTypes.parameterSuites.push(macro);
+        if (macro.name === 'INSTANTIATE_TEST_SUITE_P') {
+            macroByTypes.instantiateTestSuiteP.push(macro);
         }
-        else if (macro.type === GTestMacroType.INSTANTIATE_TYPED_TEST_SUITE_P) {
-            macroByTypes.typedParameterSuites.push(macro);
+        else if (macro.name === 'INSTANTIATE_TYPED_TEST_SUITE_P') {
+            macroByTypes.instantiateTypedTestSuite.push(macro);
         }
         else {
             macroByTypes.testCases.push(macro);
         }
         return macroByTypes;
-    }, { testCases: [], parameterSuites: [], typedParameterSuites: [] });
+    }, { testCases: [], instantiateTestSuiteP: [], instantiateTypedTestSuite: [] });
 }
 
 function createTestCaseId(macro: GTestMacro, macroByTypes: MacroByTypes) {
     const fixtureName = macro.fixture;
     const testCaseName = macro.id;
-    if (macro.type === GTestMacroType.TEST_P) {
+    if (macro.name === 'TEST_P') {
         return idForTEST_P(testCaseName, fixtureName, macroByTypes);
     }
-    if (macro.type === GTestMacroType.TYPED_TEST) {
+    if (macro.name === 'TYPED_TEST') {
         return idForTYPED_TEST(testCaseName, fixtureName);
     }
-    if (macro.type === GTestMacroType.TYPED_TEST_P) {
+    if (macro.name === 'TYPED_TEST_P') {
         return idForTYPED_TEST_P(testCaseName, fixtureName, macroByTypes);
     }
     return idForTEST(testCaseName, fixtureName);
 }
 
 function idForTEST_P(testCaseName: string, fixtureName: string, macroByTypes: MacroByTypes) {
-    const paramSuite = macroByTypes.parameterSuites.find(ps => {
+    const paramSuite = macroByTypes.instantiateTestSuiteP.find(ps => {
         return ps.id === fixtureName;
     })!;
     return paramSuite.fixture + '/' + fixtureName + '.' + testCaseName + '/*';
 }
 
-function idForTYPED_TEST(testCaseName: string, fixtureName: string,) {
+function idForTYPED_TEST(testCaseName: string, fixtureName: string) {
     return fixtureName + '/*.' + testCaseName;
 }
 
 function idForTYPED_TEST_P(testCaseName: string, fixtureName: string, macroByTypes: MacroByTypes) {
-    const paramTypeSuite = macroByTypes.typedParameterSuites.find(tps => {
+    const paramTypeSuite = macroByTypes.instantiateTypedTestSuite.find(tps => {
         return tps.id === fixtureName;
     })!;
     return paramTypeSuite.fixture + '/' + fixtureName + '/*.' + testCaseName;
