@@ -1,17 +1,17 @@
-import * as vscode from 'vscode';
-import { logDebug } from './logger';
-var fs = require("fs");
-var parseString = require('xml2js').parseString;
+import * as vscode from 'vscode'
+import { logDebug } from './logger'
+var fs = require("fs")
+var parseString = require('xml2js').parseString
 
-export function convertXMLToJSON(xmlFile: vscode.Uri) {
-    const jsonResultRaw = fs.readFileSync(xmlFile.fsPath, { encoding: 'utf8', flag: 'r' });
-    const jsonResult = jsonResultRaw.toString();
-    /* logDebug(`XML contents`);
-    logDebug(`${jsonResult}`); */
+export const convertXMLToJSON = (xmlFile: vscode.Uri) => {
+    const jsonResultRaw = fs.readFileSync(xmlFile.fsPath, { encoding: 'utf8', flag: 'r' })
+    const jsonResult = jsonResultRaw.toString()
+    /* logDebug(`XML contents`)
+    logDebug(`${jsonResult}`) */
 
     parseString(jsonResult, function (err: any, result: any) {
-        logDebug(`Start parsing`);
-        let root = {
+        logDebug(`Start parsing`)
+        const root = {
             tests: Number(result.testsuites.$.tests),
             failures: Number(result.testsuites.$.failures),
             disabled: Number(result.testsuites.$.disabled),
@@ -21,19 +21,19 @@ export function convertXMLToJSON(xmlFile: vscode.Uri) {
             name: result.testsuites.$.name,
             testsuites: getSuites(result)
         }
-        let data = JSON.stringify(root, null, 2);
-        fs.writeFileSync(xmlFile.fsPath, data);
-    });
+        let data = JSON.stringify(root, null, 2)
+        fs.writeFileSync(xmlFile.fsPath, data)
+    })
 
-    /* const jsonResultRawConv = fs.readFileSync(xmlFile.fsPath, { encoding: 'utf8', flag: 'r' });
-    const jsonResultConv = jsonResultRawConv.toString();
-    logDebug(`JSON contents`);
-    logDebug(`${jsonResultConv}`); */
+    /* const jsonResultRawConv = fs.readFileSync(xmlFile.fsPath, { encoding: 'utf8', flag: 'r' })
+    const jsonResultConv = jsonResultRawConv.toString()
+    logDebug(`JSON contents`)
+    logDebug(`${jsonResultConv}`) */
 }
 
 
-function getTestCase(testcase: any) {
-    let struct = {
+const getTestCase = (testcase: any) => {
+    const struct = {
         name: testcase.$.name,
         file: '',
         line: 0,
@@ -43,11 +43,11 @@ function getTestCase(testcase: any) {
         time: testcase.$.time,
         classname: testcase.$.classname
     }
-    return struct;
+    return struct
 }
 
-function getTestCaseWithFailures(testcase: any) {
-    let struct = {
+const getTestCaseWithFailures = (testcase: any) => {
+    const struct = {
         name: testcase.$.name,
         file: '',
         line: 0,
@@ -58,24 +58,19 @@ function getTestCaseWithFailures(testcase: any) {
         classname: testcase.$.classname,
         failures: getFailures(testcase.failure)
     }
-    return struct;
+    return struct
 }
 
-function getTestCases(testcases: any) {
-    var array: any = [];
+const getTestCases = (testcases: any) =>
     testcases.map((testcase: any) => {
         if (testcase.failure) {
-            array.push(getTestCaseWithFailures(testcase))
+            return getTestCaseWithFailures(testcase)
         }
-        else {
-            array.push(getTestCase(testcase))
-        }
+        return getTestCase(testcase)
     })
-    return array;
-}
 
-function getTestSuite(testsuite: any) {
-    let struct = {
+const getTestSuite = (testsuite: any) => {
+    const struct = {
         name: testsuite.$.name,
         tests: Number(testsuite.$.tests),
         failures: Number(testsuite.$.failures),
@@ -85,29 +80,17 @@ function getTestSuite(testsuite: any) {
         time: testsuite.$.time,
         testsuite: getTestCases(testsuite.testcase)
     }
-    return struct;
+    return struct
 }
 
-function getSuites(result: any) {
-    var array: any = [];
-    result.testsuites.testsuite.map((testsuite: any) => {
-        array.push(getTestSuite(testsuite))
-    })
-    return array;
-}
+const getSuites = (result: any) => result.testsuites.testsuite.map(getTestSuite)
 
-function getFailure(failure: any) {
-    let struct = {
+const getFailure = (failure: any) => {
+    const struct = {
         failure: failure.$.message,
         type: ''
     }
-    return struct;
+    return struct
 }
 
-function getFailures(failures: any) {
-    var array: any = [];
-    failures.map((failure: any) => {
-        array.push(getFailure(failure))
-    })
-    return array;
-}
+const getFailures = (failures: any) => failures.map(getFailure)

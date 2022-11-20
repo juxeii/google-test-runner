@@ -1,5 +1,5 @@
-import * as vscode from 'vscode';
-import { logDebug } from '../utils/logger';
+import * as vscode from 'vscode'
+import { logDebug } from '../utils/logger'
 
 export const discoverGTestMacros = (document: vscode.TextDocument) => {
     logDebug(`Discovering gtest macros in document ${document.uri}`)
@@ -25,8 +25,7 @@ const macroFromMatch = (match: RegExpMatchArray, document: vscode.TextDocument) 
     return macro
 }
 
-const lineNoFromMatch = (match: RegExpMatchArray, document: vscode.TextDocument) => {
-    return document.positionAt(match.index!).line + 1
-}
+const lineNoFromMatch = (match: RegExpMatchArray, document: vscode.TextDocument) =>
+    document.positionAt(match.index!).line + 1
 
 const GTESTMACRO_REGEXP = /^\b(TEST|TEST_F|TEST_P|TYPED_TEST|TYPED_TEST_P|INSTANTIATE_TEST_SUITE_P|INSTANTIATE_TYPED_TEST_SUITE_P)\(\s*(\w+),\s*(\w+)/gm

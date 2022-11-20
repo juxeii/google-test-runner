@@ -1,54 +1,40 @@
-import path = require('path');
-import * as vscode from 'vscode';
-import * as fs from 'fs';
+import path = require('path')
+import * as vscode from 'vscode'
+import * as fs from 'fs'
 
-export const buildNinjaFileName = 'build.ninja';
-export const extensionName = 'GoogleTestRunner';
-const configurationId = 'googletestrunner';
+export const buildNinjaFileName = 'build.ninja'
+export const extensionName = 'GoogleTestRunner'
+const configurationId = 'googletestrunner'
 
-export function getBuildFolder() {
-    const buildFolderFromConfig = getConfigurationSetting<string>('buildFolder');
-    const workspaceFolder: string = vscode.workspace.workspaceFolders![0].uri.path;
-    const regExpFolder = /\$\{workspaceFolder\}/;
+export const getBuildFolder = () => {
+    const buildFolderFromConfig = getConfigurationSetting<string>('buildFolder')
+    const workspaceFolder: string = vscode.workspace.workspaceFolders![0].uri.path
+    const regExpFolder = /\$\{workspaceFolder\}/
     if (buildFolderFromConfig) {
-        return buildFolderFromConfig.replace(regExpFolder, workspaceFolder);
+        return buildFolderFromConfig.replace(regExpFolder, workspaceFolder)
     }
-    return buildFolderFromConfig!;
+    return buildFolderFromConfig!
 }
 
-export function hasBuildFolderChanged(event: vscode.ConfigurationChangeEvent) {
-    return event.affectsConfiguration(configurationId + '.buildFolder');
-}
+export const hasBuildFolderChanged = (event: vscode.ConfigurationChangeEvent) =>
+    event.affectsConfiguration(configurationId + '.buildFolder')
 
-export function logLevel() {
-    return getConfigurationSetting<string>('logLevel')!;
-}
+export const logLevel = () => getConfigurationSetting<string>('logLevel')!
 
-export function gtestVerbosityLevel() {
-    return getConfigurationSetting<string>('gtestVerbosityLevel')!;
-}
+export const gtestVerbosityLevel = () => getConfigurationSetting<string>('gtestVerbosityLevel')!
 
-export function loadSharedLibsOnDebugForGdb() {
-    return getConfigurationSetting<boolean>('loadSharedLibsOnDebug')!;
-}
+export const loadSharedLibsOnDebugForGdb = () => getConfigurationSetting<boolean>('loadSharedLibsOnDebug')!
 
-export function legacySupport() {
-    return getConfigurationSetting<boolean>('legacySupport')!;
-}
+export const legacySupport = () => getConfigurationSetting<boolean>('legacySupport')!
 
-export function debuggerProgram() {
-    return getConfigurationSetting<string>('debugger')!;
-}
+export const debuggerProgram = () => getConfigurationSetting<string>('debugger')!
 
-export const isBuildNinjaFilePresent = (): boolean => {
-    const buildNinjaPath = path.join(getBuildFolder(), buildNinjaFileName);
-    return fs.existsSync(buildNinjaPath);
-}
+export const buildNinjaPath = () => path.join(getBuildFolder(), buildNinjaFileName)
 
-function getConfiguration() {
-    return vscode.workspace.getConfiguration(configurationId);
-}
+export const isBuildNinjaFilePresent = () => fs.existsSync(buildNinjaPath())
+
+const getConfiguration = () => vscode.workspace.getConfiguration(configurationId)
 
 function getConfigurationSetting<T>(setting: string) {
-    return getConfiguration().get<T>(setting)!;
+    return getConfiguration().get<T>(setting)!
 }

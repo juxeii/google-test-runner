@@ -1,56 +1,65 @@
-import * as vscode from 'vscode';
-import winston = require('winston');
-import * as Transport from 'winston-transport';
-import { createLogger, format } from "winston";
-import { logLevel } from './configuration';
-const { MESSAGE } = require("triple-beam");
+import * as vscode from 'vscode'
+import winston = require('winston')
+import * as Transport from 'winston-transport'
+import { createLogger, format } from "winston"
+import { logLevel } from './configuration'
+const { MESSAGE } = require("triple-beam")
 
-export function logInfo(message: string) {
-    loggerImpl.info(message);
+export const logInfo = (message: string) => {
+    loggerImpl.info(message)
 }
 
-export function logDebug(message: string) {
-    loggerImpl.debug(message);
+export const logDebug = (message: string) => {
+    loggerImpl.debug(message)
 }
 
-export function logWarning(message: string) {
-    loggerImpl.warning(message);
+export const logWarning = (message: string) => {
+    loggerImpl.warning(message)
 }
 
-
-export function logError(message: string) {
-    loggerImpl.error(message);
+export const logError = (message: string) => {
+    loggerImpl.error(message)
 }
 
 class OutputChannelTransport extends Transport {
-    outputChannel: vscode.OutputChannel;
+    outputChannel: vscode.OutputChannel
 
     constructor(outputChannel: vscode.OutputChannel) {
-        super();
-        this.outputChannel = outputChannel;
+        super()
+        this.outputChannel = outputChannel
     }
 
     log(info: any, cb: () => void) {
         setImmediate(() => {
-            this.emit('logged', info);
-        });
-        this.outputChannel.appendLine(info[MESSAGE]);
+            this.emit('logged', info)
+        })
+        this.outputChannel.appendLine(info[MESSAGE])
         if (cb) {
-            cb();
+            cb()
         }
     }
 
     close() {
         if (this.outputChannel === undefined) {
-            return;
+            return
         }
 
-        this.outputChannel.dispose();
+        this.outputChannel.dispose()
     }
-};
+}
 
-export const outputChannel = vscode.window.createOutputChannel('GoogleTestRunner');
-export const outputChannelGT = vscode.window.createOutputChannel('GoogleTest');
+export const outputChannel = vscode.window.createOutputChannel('GoogleTestRunner')
+export const outputChannelGT = vscode.window.createOutputChannel('GoogleTest')
+
+const customizedLogLevels = () => {
+    return {
+        levels: {
+            'debug': 2,
+            'info': 1,
+            'error': 0,
+        }
+    }.levels
+}
 
 const loggerImpl: winston.Logger = createLogger({
     levels: customizedLogLevels(),
@@ -60,14 +69,4 @@ const loggerImpl: winston.Logger = createLogger({
         format.timestamp({ format: () => new Date().toLocaleString('en-US', { hour12: false }) }),
         format.printf(({ timestamp, level, message }) => `[${timestamp}] ${level.toUpperCase()}: ${message}`)
     ),
-});
-
-function customizedLogLevels() {
-    return {
-        levels: {
-            'debug': 2,
-            'info': 1,
-            'error': 0,
-        }
-    }.levels;
-}
+})
