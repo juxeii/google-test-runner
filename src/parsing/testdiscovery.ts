@@ -43,25 +43,25 @@ const createTestCases = (macro: GTestMacro, macroByTypes: MacroByTypes) =>
     createTestCaseIds(macro, macroByTypes)
         .map(id => {
             return {
-                fixture: macro.fixture,
-                name: macro.id,
+                fixture: macro.parameters[0],
+                name: macro.parameters[1],
                 id: id,
                 lineNo: macro.lineNo
             }
         })
 
 const createTestCaseIds = (macro: GTestMacro, macroByTypes: MacroByTypes) => {
-    const fixtureName = macro.fixture
-    const testCaseName = macro.id
+    const fixtureName = macro.parameters[0]
+    const testCaseName = macro.parameters[1]
     if (macro.name === 'TEST_P') {
         return macroByTypes.instantiateTestSuiteP
-            .filter(ps => ps.id === fixtureName)
-            .map(paramSuite => paramSuite.fixture + '/' + fixtureName + '.' + testCaseName + '/*')
+            .filter(ps => ps.parameters[1] === fixtureName)
+            .map(paramSuite => paramSuite.parameters[0] + '/' + fixtureName + '.' + testCaseName + '/*')
     }
     if (macro.name === 'TYPED_TEST_P') {
         return macroByTypes.instantiateTypedTestSuite
-            .filter(ps => ps.id === fixtureName)
-            .map(paramTypeSuite => paramTypeSuite.fixture + '/' + fixtureName + '/*.' + testCaseName)
+            .filter(ps => ps.parameters[1] === fixtureName)
+            .map(paramTypeSuite => paramTypeSuite.parameters[0] + '/' + fixtureName + '/*.' + testCaseName)
     }
     if (macro.name === 'TYPED_TEST') {
         return [fixtureName + '/*.' + testCaseName]
@@ -70,7 +70,4 @@ const createTestCaseIds = (macro: GTestMacro, macroByTypes: MacroByTypes) => {
 }
 
 const printTestCases = (testCases: TestCase[]) =>
-    testCases.forEach(testCase => logDebug(`Discovered testcase ${testCase.name} \
-    fixture ${testCase.fixture} \
-    id ${testCase.id} \
-    lineNo ${testCase.lineNo}`))
+    testCases.forEach(testCase => logDebug(`Discovered testcase ${testCase.name} fixture ${testCase.fixture} id ${testCase.id} lineNo ${testCase.lineNo}`))
