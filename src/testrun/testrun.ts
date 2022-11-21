@@ -1,14 +1,13 @@
 import * as vscode from 'vscode'
-import * as path from 'path'
-import { logInfo, logDebug, logError, outputChannelGT, logWarning } from '../utils/logger'
-import { buildTest, buildTests } from './testbuild'
+import { buildTests } from './testbuild'
 import { observeTestResult } from './testevaluation'
 import { createLeafItemsByRoot } from './testcontroller'
 import { runTest } from './testexecution'
-import { getFileContents, getGTestLogFile } from '../utils/fsutils'
-import { loadSharedLibsOnDebugForGdb, debuggerProgram } from '../utils/configuration'
-import { ExtEnvironment, showWarningMessage } from '../extension'
+import { ExtEnvironment } from '../extension'
 import { TargetByInfo } from '../parsing/buildninja'
+import { startDebug } from './testdebug'
+import { getFileContents, getGTestLogFile } from '../utils/fsutils'
+import { logInfo, logDebug, outputChannelGT, logDelimiterLine, printBlock } from '../utils/logger'
 
 export type RunEnvironment = {
     testRun: vscode.TestRun
@@ -28,86 +27,16 @@ export const initRunProfiles = (extEnvironment: ExtEnvironment) => {
     }
 }
 
-const createDebugHandler = (env: ExtEnvironment) => {
-    return async function debugHandler(
+const createDebugHandler = (env: ExtEnvironment) =>
+    async function debugHandler(
         runRequest: vscode.TestRunRequest,
         token: vscode.CancellationToken
     ) {
-        if (!runRequest.include || runRequest.include.length > 1) {
-            logInfo('Only one testcase at a time is supported for debugging.')
-            return
-        }
-
-        const debuggerExec = debuggerProgram()
-        if (debuggerExec == 'lldb') {
-            var commandExistsSync = require('command-exists').sync
-            if (!commandExistsSync('lldb-mi')) {
-                const warnMessage = 'lldb-mi not exist! Make sure you have it installed and sourced in your environemnt. Debug seesion failed!'
-                logWarning(warnMessage)
-                showWarningMessage(warnMessage)()
-                return
-            }
-        }
-
-        const testItem = runRequest.include[0]
-        const targetName = env.targetInfoByFile.get(testItem.uri!.fsPath)!.name
-        buildTest(targetName, testItem).subscribe({
-            next() { logDebug(`Debug build finished.`) },
-            error() { logError(`Debug build failed!`) },
-            complete() { debug() }
-        })
-
-        function debug() {
-            printBlock('Debug session started.')
-            const targetFile = env.targetInfoByFile.get(testItem.uri!.fsPath)!.targetFile
-            const cwd = path.dirname(targetFile)
-            const workspaceFolder = vscode.workspace.workspaceFolders![0]
-            const testCaseName = testItem.label
-            logInfo(`Debugging testcase ${testCaseName} in executable ${targetFile}.`)
-
-            vscode.debug.onDidTerminateDebugSession((e) => {
-                printBlock('Debug session ended.')
-            })
-
-            if (debuggerExec == 'lldb') {
-                vscode.debug.startDebugging(workspaceFolder, {
-                    'name': 'GTestRunner Debug',
-                    'type': 'cppdbg',
-                    'request': 'launch',
-                    'program': targetFile,
-                    'stopAtEntry': false,
-                    'cwd': cwd,
-                    'externalConsole': false,
-                    'MIMode': "lldb",
-                    'miDebuggerPath': 'lldb-mi',
-                    '"setupCommands': [
-                        {
-                            'text': 'settings set symbols.load-on-demand true'
-                        }
-                    ]
-                })
-            }
-            else {
-                vscode.debug.startDebugging(workspaceFolder, {
-                    'name': 'GTestRunner Debug',
-                    'type': 'cppdbg',
-                    'request': 'launch',
-                    'program': targetFile,
-                    'stopAtEntry': false,
-                    'cwd': cwd,
-                    'externalConsole': false,
-                    "symbolLoadInfo": {
-                        "loadAll": loadSharedLibsOnDebugForGdb(),
-                        "exceptionList": ""
-                    },
-                })
-            }
-        }
+        startDebug(env, runRequest);
     }
-}
 
-const createRunHandler = (env: ExtEnvironment) => {
-    return async function runHandler(
+const createRunHandler = (env: ExtEnvironment) =>
+    async function runHandler(
         runRequest: vscode.TestRunRequest,
         token: vscode.CancellationToken
     ) {
@@ -131,7 +60,6 @@ const createRunHandler = (env: ExtEnvironment) => {
             printBlock('Test run cancelled.')
         })
     }
-}
 
 const observeTestExecution = (rootItem: vscode.TestItem, runEnvironment: RunEnvironment) => {
     const filePath = rootItem.uri?.fsPath!
@@ -198,11 +126,3 @@ const showLogFiles = (runEnvironment: RunEnvironment) =>
         outputChannelGT.appendLine(logFileText)
         outputChannelGT.appendLine(logDelimiterLine)
     })
-
-const printBlock = (blockText: string) => {
-    logInfo(logDelimiterLine)
-    logInfo(blockText)
-    logInfo(logDelimiterLine)
-}
-
-const logDelimiterLine = '***********************************************'

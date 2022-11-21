@@ -4,7 +4,7 @@ import { logDebug } from '../utils/logger'
 export const discoverGTestMacros = (document: vscode.TextDocument) => {
     logDebug(`Discovering gtest macros in document ${document.uri}`)
     return [...document.getText().matchAll(GTESTMACRO_REGEXP)]
-        .map((match: RegExpMatchArray) => {
+        .map(match => {
             const macro = macroFromMatch(match, document)
             logDebug(`Macro name ${macro.name} lineNo ${macro.lineNo} parameters ${macro.parameters}`)
             return macro

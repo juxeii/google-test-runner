@@ -21,6 +21,14 @@ export const logError = (message: string) => {
     loggerImpl.error(message)
 }
 
+export const printBlock = (blockText: string) => {
+    logInfo(logDelimiterLine)
+    logInfo(blockText)
+    logInfo(logDelimiterLine)
+}
+
+export const logDelimiterLine = '***********************************************'
+
 class OutputChannelTransport extends Transport {
     outputChannel: vscode.OutputChannel
 

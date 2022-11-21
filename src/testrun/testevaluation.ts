@@ -9,7 +9,7 @@ import { convertXMLToJSON } from '../utils/xmlutils';
 
 export const observeTestResult = (rootItem: vscode.TestItem, runEnvironment: RunEnvironment) =>
     createTestReportById(rootItem)
-        .map((testReportById: Map<string, rj.TestReport[]>) => {
+        .map((testReportById) => {
             if (!hasEvaluatedWithoutErrors(rootItem, runEnvironment, testReportById)) {
                 throw new Error('Internal test evaluation error!')
             }

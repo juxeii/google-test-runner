@@ -18,7 +18,7 @@ const fillMappingWithTargetInfo = (fileContents: string) => {
     const relPathByTarget = createTargetFileByTargetMapping(fileContents)
 
     const targetByFileMapping = [...fileContents.matchAll(FILEANDTARGET_REGEXP)]
-        .reduce((targetByFileMapping: Map<string, TargetByInfo>, match: RegExpMatchArray) => {
+        .reduce((targetByFileMapping, match) => {
             const target = match[1]
             const path = match[2]
             const relTargetFile = relPathByTarget.get(target)
@@ -35,7 +35,7 @@ const fillMappingWithTargetInfo = (fileContents: string) => {
 
 const createTargetFileByTargetMapping = (fileContents: string) =>
     [...fileContents.matchAll(TARGETFILE_REGEXP)]
-        .reduce((targetFileByTarget: Map<string, string>, match: RegExpMatchArray) => {
+        .reduce((targetFileByTarget, match) => {
             const targetFile = match[1]
             const target = match[2]
             targetFileByTarget.set(target, targetFile)
