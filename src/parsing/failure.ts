@@ -27,10 +27,10 @@ const msgParamsForExpectation = (item: vscode.TestItem, failureMessage: string, 
         return none
     }
     const splitted = failureMessage.split('\n')
-    const expectedTerm = splitted[1].trim()
-    const subSplit = expectedTerm.split(', actual:')
-    const expected = subSplit[0].replace('Expected:', '').trim()
-    const actual = subSplit[1].trim()
+    const expectedTerm = splitted[2].trim()
+    const actualTerm = splitted[3].trim()
+    const expected = expectedTerm.replace('Expected:', '').trim()
+    const actual = actualTerm.replace('Actual:', '').trim()
     return some({ item: item, expectedTerm: expectedTerm, expected: expected, actual: actual, lineNo: failure.lineNo })
 }
 

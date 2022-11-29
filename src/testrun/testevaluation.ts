@@ -41,8 +41,9 @@ const hasEvaluatedWithoutErrors = (rootItem: vscode.TestItem, runEnvironment: Ru
 }
 
 const evaluteItem = (item: vscode.TestItem, testReportsForItem: rj.TestReport[], testRun: vscode.TestRun) => {
-    logDebug(`Looking for test result of leaf item ${item.id} `)
+    logDebug(`Looking for test result of leaf item ${item.id}`)
     const testCaseFailures = testReportsForItem.filter(report => !report.hasPassed)
+    logDebug(`evaluteItem1 ${item.id}`)
 
     if (testCaseFailures.length === 0) {
         processPassedTestcase(testRun, item)

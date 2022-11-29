@@ -85,13 +85,18 @@ const failuresOfTestCaseJSON = (testCaseJSON: any, parameter: any) => {
 }
 
 const fillFailures = (failuresJSON: Array<any>, paramName: string): TestFailure[] =>
-    failuresJSON.map(failureJSON => {
-        return {
-            message: failureJSON.failure,
-            lineNo: lineNumberFromFailureMessage(failureJSON.failure),
-            param: paramName
-        }
-    })
+    failuresJSON
+        .filter(failureJSON => {
+            const lineNoMatch = LINENO_REGEXP.exec(failureJSON.failure)!
+            return lineNoMatch ? true : false
+        })
+        .map(failureJSON => {
+            return {
+                message: failureJSON.failure,
+                lineNo: lineNumberFromFailureMessage(failureJSON.failure),
+                param: paramName
+            }
+        })
 
 const testCaseId = (testcase: any) => {
     const testCaseName: string = testcase.name
