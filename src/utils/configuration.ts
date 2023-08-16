@@ -29,6 +29,10 @@ export const legacySupport = () => getConfigurationSetting<boolean>('legacySuppo
 
 export const debuggerProgram = () => getConfigurationSetting<string>('debugger')!
 
+export const envFile = () => getConfigurationSetting<string>('envFile')!
+
+export const env = () => getConfigurationSetting<any>('env')!
+
 export const buildNinjaPath = () => path.join(getBuildFolder(), buildNinjaFileName)
 
 export const isBuildNinjaFilePresent = () => fs.existsSync(buildNinjaPath())

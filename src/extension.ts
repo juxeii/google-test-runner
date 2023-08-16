@@ -7,6 +7,7 @@ import { FileUpdate, observeFileUpdates } from './utils/listener'
 import { Observable, Subscription, SubscriptionObserver } from 'observable-fns'
 import { doesPathExist } from './utils/fsutils'
 import { IO } from 'fp-ts/lib/IO'
+import dotenv = require('dotenv')
 const commandExistsSync = require('command-exists').sync
 
 export type ExtEnvironment = {
@@ -19,6 +20,7 @@ export type ExtEnvironment = {
 export function activate(context: vscode.ExtensionContext) {
     logInfo(`${cfg.extensionName} activated.`)
 
+    applyEnvironment()
     if (!isEnvironmentValid()) {
         return
     }
@@ -39,6 +41,15 @@ const isEnvironmentValid = () => {
     }
     logDebug(`Environment seems fine.`)
     return true
+}
+
+function applyEnvironment() {
+    const envFile = cfg.envFile()
+    if (envFile) {
+        dotenv.config({ path: envFile, debug: true, override: true })
+    }
+
+    dotenv.populate(process.env as dotenv.DotenvPopulateInput, cfg.env(), { debug: true, override: true })
 }
 
 const subscribeToBuildManifestUpdates = (environment: ExtEnvironment) => {
